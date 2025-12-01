@@ -6,8 +6,8 @@ GA: G-DXYJBX6BH8
 
 # GH-200 Reference
 :::success
-Date: 20250904
-Course ID: 86473
+Date: 20251127
+Course ID: 89283
 :::
 
 :::info
@@ -64,15 +64,23 @@ Post Course Survey: [https://aka.ms/gh200survey](https://aka.ms/gh200survey)
 [Larger runners](https://docs.github.com/en/actions/concepts/runners/larger-runners#machine-sizes-for-larger-runners)
 
 ### Workflows
-[Workflows](https://docs.github.com/en/enterprise-server@3.14/actions/concepts/workflows-and-actions/workflows)
+[Workflows](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflows)
 
-[Store and share data with workflow artifacts](https://docs.github.com/zh/enterprise-cloud@latest/actions/tutorials/store-and-share-data)
+[Workflow syntax for GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
+
+[Store and share data with workflow artifacts](https://docs.github.com/zh/actions/tutorials/store-and-share-data)
+
+[Evaluate expressions in workflows and actions](https://docs.github.com/en/actions/reference/workflows-and-actions/expressions)
 
 [Variables reference](https://docs.github.com/en/actions/reference/workflows-and-actions/variables)
 
-[Github context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts)
+[Github Contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts)
 
 [Store information in variables](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-variables#default-environment-variables)
+
+[Creating workflow templates for your organization](https://docs.github.com/en/actions/how-tos/reuse-automations/create-workflow-templates)
+
+[Enabling debug logging](https://docs.github.com/en/actions/how-tos/monitor-workflows/enable-debug-logging)
 
 #### GitHub Apps
 [About using GitHub Apps](https://docs.github.com/en/apps/using-github-apps/about-using-github-apps)
@@ -99,6 +107,8 @@ Post Course Survey: [https://aka.ms/gh200survey](https://aka.ms/gh200survey)
 [Introduction to GitHub Packages](https://docs.github.com/en/packages/learn-github-packages/introduction-to-github-packages)
 
 [Releasing projects on GitHub](https://docs.github.com/en/repositories/releasing-projects-on-github)
+
+[Working with the Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 
 ## Exercises
 - 01. [Exercise - Create and run a basic GitHub Actions workflow](https://learn.microsoft.com/en-us/training/modules/github-actions-automate-tasks/3-exercise-create-container-action)
