@@ -139,7 +139,7 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 
 #### Demo・Lab
 
-- 用 `09.troubleshooting` 製造或開啟既有失敗案例，讓學員完成 `lab03` 並說出 root cause。
+- 用 `09.troubleshooting` 製造或開啟既有失敗案例，讓學員完成 `lab06` 並說出 root cause。
 - 對照 Java workflow 和指定技術堆疊的 template，避免把 template 視為通用的完成品。
 
 #### 常見問題・坑
@@ -191,7 +191,7 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 
 #### Demo・Lab
 
-- 用 `08.selfhosted-runner` 與 `lab04` 對照 VM runner；若無 org admin 權限，改用流程圖與已備妥畫面。
+- 用 `08.selfhosted-runner` 與選修 `lab07` 對照 VM runner；若無 org admin 權限，改用流程圖與已備妥畫面。
 
 #### 常見問題・坑
 
@@ -222,7 +222,7 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 #### Demo・Lab
 
 - `04.deploy-test` 部署 `simpleweb-test:8080`；`05.deploy-prod` 等待 production approval 後部署 `simpleweb-prod:8081`；`06.full-pipeline` 串起流程。
-- `lab05`/`lab06` 寫 YAML；`07.deploy-ssh` 只作 SSH 安全代價的對照。
+- `lab04`/`lab05` 寫 YAML；`07.deploy-ssh` 只作 SSH 安全代價的對照。
 
 #### 常見問題・坑
 
