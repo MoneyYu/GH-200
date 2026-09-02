@@ -88,6 +88,10 @@ the *same* verified URLs. Re-run before every delivery — Microsoft rename/reti
 > Create the course environment with `uv venv .venv`, then run:
 > `.venv\Scripts\python.exe .github\skills\course-prep\scripts\link_check.py urls.txt`.
 > The checker exits non-zero for failed URLs, unavailable videos, or unapproved channel identities.
+> It also rejects HTTP 200 responses that land on known generic/error destinations
+> (`Fault.aspx`, `ClassID=-1`, unregistered `aka.ms` → Bing, or a generic Learn browse page).
+> If the user explicitly requires a known-bad link to remain, prefix that ledger label with
+> `ALLOW-SEMANTIC:` and document the exception in trainer material.
 
 ## Videos
 

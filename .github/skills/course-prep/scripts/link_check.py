@@ -13,6 +13,8 @@ Usage:
     python link_check.py urls.txt
 
 Input file: one entry per line, either "label | url" or just "url".
+Prefix a label with "ALLOW-SEMANTIC:" only for a user-approved, documented
+exception that must remain despite a known semantic failure.
 Blank lines and lines starting with '#' are ignored.
 
 Notes:
@@ -87,6 +89,18 @@ def title_of(body):
     return re.sub(r"\s+", " ", m.group(1)).strip()[:110] if m else ""
 
 
+def semantic_issue(final_url):
+    """Return why a 200 response is semantically unusable, or an empty string."""
+    url = final_url.lower()
+    patterns = {
+        "/fault.aspx": "redirected to an error/fault page",
+        "classid=-1": "redirected to an invalid class/survey",
+        "/training/browse/": "redirected to a generic training browse page",
+        "bing.com/?ref=aka&shorturl=": "aka.ms shortlink is unregistered",
+    }
+    return next((reason for marker, reason in patterns.items() if marker in url), "")
+
+
 def main():
     failures = 0
     try:
@@ -107,12 +121,21 @@ def main():
                 failures += 1
             continue
         status, final, body = fetch(url)
+        title = title_of(body)
         redir = "" if final == url else f"  ->FINAL: {final}"
         print(f"[{status}] {label or url}")
         print(f"    url: {url}{redir}")
-        print(f"    title: {title_of(body)}")
+        print(f"    title: {title}")
         if status != 200:
             failures += 1
+            continue
+        issue = semantic_issue(final)
+        if issue:
+            allowed = label.startswith("ALLOW-SEMANTIC:")
+            outcome = "ALLOWED-SEMANTIC" if allowed else "SEMANTIC-FAIL"
+            print(f"    [{outcome}] {issue}")
+            if not allowed:
+                failures += 1
     if failures:
         print(f"[SUMMARY] FAIL: {failures} URL(s) require attention.")
         return 1
