@@ -21,6 +21,29 @@ behavioral — this is not a place for narrative history.
 - The course grants only an **Achievement Code** — there is **no Applied Skills credential**. Never
   add an `## Applied Skills` section to `README.md`.
 
+## 2026-09-03 customer delivery
+
+- This delivery uses the customer's certification-domain numbering rather than the official
+  seven-module Learn sequence: **M1 Design and Manage Workflows**, **M2 Consume and Troubleshoot
+  Workflows**, **M3 not taught**, **M4 Manage GitHub Actions in the Enterprise**, and **M5 Secure
+  and Optimize Automation**. Keep the M3 numbering gap.
+- **Do not add these removed topics back into the taught agenda:** Reusable Workflows, Matrix
+  Strategy, or Author and Maintain Actions (the whole M3). Cache is concept-only. OIDC examples
+  target Azure. Workflow Templates focus on Angular, React, Node.js, Python, Java, and C#.
+- The class repo is `MoneyDemo/20260903-GH200`. It contains a Java 21 / Spring Boot 4.1.1 demo,
+  progressive workflows `01`–`09`, and fill-in-the-blank student labs. CI labs run in student
+  forks; CD labs are trainer-run by default because each fork needs its own exact OIDC federated
+  credential and RBAC.
+- The deployed Java target is `lab-linux-0903-ksh` in `GH200-0903`: test on port `8080`,
+  production on `8081`. Production uses a GitHub Environment required-reviewer gate. The Linux
+  VM also supports the SSH comparison and an ephemeral self-hosted runner demo.
+- The shared Azure subscription enforces policy after deployment: Public IP resources receive a
+  `FirstPartyUsage` tag, Windows OS disks use `Standard_LRS`, Web App basic publishing auth stays
+  disabled, and persistent Internet SSH rules are removed. Terraform deliberately matches/ignores
+  those policy-owned values so post-deploy `terraform plan` is clean. For the optional SSH demo,
+  open the exact `AllowSshForDemo` NSG rule immediately before the run and remove it immediately
+  afterwards; never make port 22 persistent.
+
 ## Labs: there is no lab repo
 
 - GH-200 has **no** `MicrosoftLearning/*` lab repo and **no** `aka.ms/gh200labs`-style shortlink
@@ -70,11 +93,17 @@ behavioral — this is not a place for narrative history.
 - This stack is the trainer's **backup/fallback** only. In class the trainer builds resources
   live; this stands them up if that fails. It maps to the course as: **Windows VM → M07
   self-hosted runner** demo, **App Service Web App → M03** deploy target.
+- For the 2026-09-03 customer delivery, the stack also contains an Ubuntu 24.04 VM for the Java
+  Build → Test → Package → Deploy story. It runs `simpleweb-test` (8080) and `simpleweb-prod`
+  (8081). `cloud-init-java.yaml` installs OpenJDK 21 and creates the systemd units.
 - **`terraform apply` is forbidden for the AI agent** (`.github/instructions/terraform.instructions.md`).
   `fmt`, `init`, `validate`, and `plan` are allowed. `terraform destroy` is permitted by the base
   rule but is destructive, so run it only after an explicit user request and confirmation; course
   cleanup is normally trainer-run. Because `apply` is forbidden, never claim an end-to-end
   apply/destroy validation was performed.
+- The user explicitly authorized one reviewed, one-off apply of `GH200-0903` for this delivery.
+  It completed with 18 added / 0 changed / 0 destroyed. **Do not run apply again and do not run
+  destroy before the class.**
 - `azurerm` must be **`~>4.0` or higher**. Write resources from the official provider docs; do not
   invent arguments. `terraform validate` passing is the proof.
 - File split: `MAIN.tf` = terraform/provider blocks, variables, locals, resource group;
@@ -86,6 +115,10 @@ behavioral — this is not a place for narrative history.
 - Apply `tags = local.default_tags` to every taggable resource.
 - **No credentials in source.** `var.user_password` is `sensitive` and has no default; supply it
   via `TF_VAR_user_password` or `-var`. `*.tfvars` is git-ignored for this reason.
+- Active state is stored in the AAD-only Azure backend
+  `gh200state0903ksh/tfstate/gh200-0903.tfstate`; shared-key access is disabled. Fresh clones must
+  use the backend configuration documented in `TERRAFORM/README.md`. Never download or commit
+  state, and never re-enable shared-key authentication.
 
 ## What is not committed
 
