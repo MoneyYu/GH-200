@@ -522,7 +522,10 @@ Step 只有兩種形式：`run:`（執行 shell 指令）或 `uses:`（呼叫 ac
 - **Self-hosted runner 的安全紅線**：**絕對不要**把 self-hosted runner 掛在接受不信任 fork PR 的 public repository 上——外部 PR 可在你的機器上執行任意程式碼。這句話務必講出來。
 - **Runner groups** 用來限制「哪些 repository／組織可以用哪些 runner」，是企業情境的關鍵控制點。
 - **Registration token 是短效的**：現場註冊 runner 時，token 取得後要儘快使用，過期就要重新產生（demo 前才取，不要提早截圖到投影片裡）。
-- **Reusable workflow + required workflow 的治理價值**：中央維護一份 CI 標準，各 repo 引用，改一次全面生效——對照 starter workflow 的「複製後不同步」。
+- **Reusable workflow + organization ruleset 的治理價值**：reusable workflow 集中維護
+  CI 實作；organization repository ruleset 的 **Require workflows to pass before
+  merging** 規則則可要求目標 repositories 在 merge 前通過指定 workflow。舊的
+  standalone Actions **Required Workflows** 功能已退役，不要尋找舊 UI。
 - **成本與用量觀念**：GitHub-hosted runner 依 plan 有一定額度，超出後依用量計費；self-hosted runner 不計 Actions 分鐘數，但**機器、維運與安全成本轉嫁給你**。**不要在課堂上報具體價格或免費額度數字**——請學員以官方 billing 頁面為準。
 
 #### Demo / Lab
@@ -553,6 +556,7 @@ Step 只有兩種形式：`run:`（執行 shell 指令）或 `uses:`（呼叫 ac
 - Larger runners：<https://docs.github.com/en/actions/concepts/runners/larger-runners>
 - Reusable workflows：<https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows>
 - Workflow templates：<https://docs.github.com/en/actions/how-tos/reuse-automations/create-workflow-templates>
+- Rulesets — Require workflows to pass before merging：<https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging>
 - Secure use：<https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions>
 
 ---

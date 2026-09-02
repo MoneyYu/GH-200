@@ -158,6 +158,7 @@ Module 07 has no dedicated hands-on exercise.
 [Organization Actions policies and allow-lists](https://docs.github.com/en/organizations/managing-organization-settings/disabling-or-limiting-github-actions-for-your-organization)
 [Enterprise Actions policies](https://docs.github.com/en/enterprise-cloud@latest/admin/enforcing-policies/enforcing-policies-for-your-enterprise/enforcing-policies-for-github-actions-in-your-enterprise)
 [Organization workflow templates](https://docs.github.com/en/actions/how-tos/reuse-automations/create-workflow-templates)
+[Require workflows to pass before merging with rulesets](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging)
 
 ##### Starter workflows vs reusable workflows vs composite actions
 [Reusable workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
@@ -260,6 +261,7 @@ SVG: [exam.svg](https://mttcontent.yu.money/common/exam.svg)
 ## M07 - Enterprise management
 - GitHub Enterprise Cloud vs GitHub Enterprise Server
 - Organization and enterprise [Actions policies](https://docs.github.com/en/organizations/managing-organization-settings/disabling-or-limiting-github-actions-for-your-organization)
+- Enforce required checks with [organization rulesets](https://docs.github.com/en/enterprise-cloud@latest/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-workflows-to-pass-before-merging)
 - **Starter workflow** vs [**reusable workflow**](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows) vs **composite action**
 - [Runner groups](https://docs.github.com/en/actions/concepts/runners/runner-groups), private networking, and autoscaling
 - **GITHUB_TOKEN** vs **PAT**; encrypted secrets and least privilege
