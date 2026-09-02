@@ -38,11 +38,23 @@
 ###############################################################################
 # behavior for image files
 #
-# image files are treated as binary by default.
+# The global "* text=auto" above would otherwise line-ending-normalize (and so
+# corrupt) these formats, so mark them binary explicitly.
 ###############################################################################
-#*.jpg   binary
-#*.png   binary
-#*.gif   binary
+*.jpg   binary
+*.jpeg  binary
+*.png   binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
+
+###############################################################################
+# Office courseware
+###############################################################################
+*.pptx  binary
+*.docx  binary
+*.xlsx  binary
 
 ###############################################################################
 # diff behavior for common document formats

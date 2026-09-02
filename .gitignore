@@ -8,12 +8,6 @@
 # Crash log files
 crash.log
 
-# Ignore any .tfvars files that are generated automatically for each Terraform run. Most
-# .tfvars files are managed as part of configuration and so should be included in
-# version control.
-#
-# example.tfvars
-
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
 override.tf
@@ -32,3 +26,23 @@ override.tf.json
 .terraformrc
 terraform.rc
 .terraform.lock.hcl
+
+# Variable files may carry the VM admin password (var.user_password) — never commit them
+*.tfvars
+*.tfvars.json
+
+###############################################################################
+# Course repo
+###############################################################################
+
+# IRM-protected courseware — must not be redistributed
+PPT/
+
+# Local Python virtual environment used to run .github/skills/course-prep/scripts/link_check.py
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local link-check ledgers and scratch output
+urls*.txt
+linkcheck*.csv
