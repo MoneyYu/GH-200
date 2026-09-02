@@ -1,10 +1,18 @@
 terraform {
-  required_version = ">=0.12"
+  required_version = ">= 1.0"
 
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~>3.0"
+      version = "~> 4.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7"
+    }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.5"
     }
   }
 }
@@ -14,52 +22,45 @@ provider "azurerm" {
 }
 
 variable "group_postfix" {
-  type = string
+  type        = string
+  description = "Lowercase alphanumeric suffix used in the resource group name."
+
+  validation {
+    condition     = can(regex("^[a-z0-9]{1,10}$", var.group_postfix))
+    error_message = "group_postfix must contain 1 to 10 lowercase alphanumeric characters."
+  }
 }
 
 variable "user_name" {
-  type    = string
-  default = "demouser"
+  type        = string
+  default     = "demouser"
+  description = "Local administrator username for the Windows VM."
 }
 
-variable "user_passowrd" {
-  type    = string
-  default = "Azuredemo2020"
+variable "user_password" {
+  type        = string
+  sensitive   = true
+  description = "Local administrator password for the Windows VM. Supply it at runtime."
 }
 
 locals {
-  group_name    = "GH200-${var.group_postfix}"
-  location      = "japaneast"
-  vm_size       = "Standard_B4ms"
-  random_str    = "ksh"
-  admin_oid     = "b8e50bc5-6559-4643-a003-2807a8d707f7"
-  lab_name      = "lab"
-  lab01_name    = "lab01"
-  lab01a_name   = "lab01a"
-  lab01b_name   = "lab01b"
-  lab01c_name   = "lab01c"
-  lab01d_name   = "lab01d"
-  lab01e_name   = "lab01e"
-  lab01f_name   = "lab01f"
-  lab01g_name   = "lab01g"
-  lab01h_name   = "lab01h"
-  lab02_name    = "lab02"
-  lab03_name    = "lab03"
-  lab04_name    = "lab04"
-  lab05_name    = "lab05"
-  lab06_name    = "lab06"
-  lab07_name    = "lab07"
-  user_name     = "demouser"
-  user_passowrd = "Azuredemo2020"
+  group_name      = "GH200-${var.group_postfix}"
+  location        = "japaneast"
+  vm_size         = "Standard_B4ms"
+  random_str      = "ksh"
+  lab_name        = "lab"
+  resource_suffix = "${var.group_postfix}-${local.random_str}"
 
   default_tags = {
-    environment = local.group_name
+    environment     = local.group_name
     SecurityControl = "Ignore"
   }
 }
 
 data "http" "myip" {
-  url = "http://ipv4.icanhazip.com"
+  url = "https://ipv4.icanhazip.com"
+
+  # use: data.http.myip.response_body
 }
 
 data "azurerm_client_config" "current" {}

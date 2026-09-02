@@ -1,6 +1,6 @@
 ## LAB-VM
 resource "azurerm_virtual_network" "lab" {
-  name                = "${local.lab_name}-vnet-${local.random_str}"
+  name                = "${local.lab_name}-vnet-${local.resource_suffix}"
   address_space       = ["10.10.0.0/16"]
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
@@ -16,7 +16,7 @@ resource "azurerm_subnet" "lab" {
 }
 
 resource "azurerm_public_ip" "lab" {
-  name                = "${local.lab_name}-pip-${local.random_str}"
+  name                = "${local.lab_name}-pip-${local.resource_suffix}"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Static"
@@ -26,28 +26,29 @@ resource "azurerm_public_ip" "lab" {
 }
 
 resource "azurerm_network_interface" "lab" {
-  name                = "${local.lab_name}-nic-${local.random_str}"
+  name                = "${local.lab_name}-nic-${local.resource_suffix}"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
   ip_configuration {
-    name                          = "${local.lab_name}-nic-ipconfig-${local.random_str}"
+    name                          = "${local.lab_name}-nic-ipconfig-${local.resource_suffix}"
     subnet_id                     = azurerm_subnet.lab.id
     private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.lab.id
   }
 
   tags = local.default_tags
 }
 
 resource "azurerm_windows_virtual_machine" "lab" {
-  name                  = "${local.lab_name}-vm-${local.random_str}"
+  name                  = "${local.lab_name}-vm-${local.resource_suffix}"
   location              = azurerm_resource_group.rg.location
   resource_group_name   = azurerm_resource_group.rg.name
   network_interface_ids = [azurerm_network_interface.lab.id]
   size                  = local.vm_size
 
   os_disk {
-    name                 = "${local.lab_name}-osdisk-${local.random_str}"
+    name                 = "${local.lab_name}-osdisk-${local.resource_suffix}"
     caching              = "ReadWrite"
     storage_account_type = "Premium_LRS"
   }
@@ -59,15 +60,15 @@ resource "azurerm_windows_virtual_machine" "lab" {
     version   = "latest"
   }
 
-  computer_name  = "${local.lab_name}-vm-${local.random_str}"
-  admin_username = local.user_name
-  admin_password = local.user_passowrd
+  computer_name  = "labvm-${substr(var.group_postfix, 0, 4)}-${local.random_str}"
+  admin_username = var.user_name
+  admin_password = var.user_password
 
   tags = local.default_tags
 }
 
 resource "azurerm_virtual_machine_extension" "labaad" {
-  name                       = "${local.lab_name}-aad-${local.random_str}"
+  name                       = "${local.lab_name}-aad-${local.resource_suffix}"
   publisher                  = "Microsoft.Azure.ActiveDirectory"
   type                       = "AADLoginForWindows"
   type_handler_version       = "1.0"
@@ -78,7 +79,7 @@ resource "azurerm_virtual_machine_extension" "labaad" {
 }
 
 resource "azurerm_virtual_machine_extension" "labscript" {
-  name                       = "${local.lab_name}-script-${local.random_str}"
+  name                       = "${local.lab_name}-script-${local.resource_suffix}"
   publisher                  = "Microsoft.Compute"
   type                       = "CustomScriptExtension"
   type_handler_version       = "1.9"
@@ -96,7 +97,7 @@ resource "azurerm_virtual_machine_extension" "labscript" {
 
 ## LAB-WEB-APP
 resource "azurerm_service_plan" "lab" {
-  name                = "${local.lab_name}-app-plan-${local.random_str}"
+  name                = "${local.lab_name}-app-plan-${local.resource_suffix}"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   os_type             = "Windows"
@@ -106,7 +107,7 @@ resource "azurerm_service_plan" "lab" {
 }
 
 resource "azurerm_windows_web_app" "lab" {
-  name                = "${local.lab_name}-web-${local.random_str}"
+  name                = "gh200-web-${local.resource_suffix}"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   service_plan_id     = azurerm_service_plan.lab.id
@@ -114,7 +115,7 @@ resource "azurerm_windows_web_app" "lab" {
   site_config {
     application_stack {
       current_stack  = "dotnet"
-      dotnet_version = "v6.0"
+      dotnet_version = "v8.0"
     }
   }
 
