@@ -1,0 +1,62 @@
+#cloud-config
+package_update: true
+packages:
+  - openjdk-21-jre-headless
+
+users:
+  - default
+  - name: simpleweb
+    system: true
+    lock_passwd: true
+    shell: /usr/sbin/nologin
+
+write_files:
+  - path: /etc/systemd/system/simpleweb-test.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=SimpleWeb test environment
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=simpleweb
+      Environment=SERVER_PORT=8080
+      Environment=APP_ENVIRONMENT=test
+      EnvironmentFile=-/opt/simpleweb/test/app.env
+      ExecStart=/usr/bin/java -jar /opt/simpleweb/test/simpleweb.jar
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/simpleweb-prod.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=SimpleWeb production environment
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=simpleweb
+      Environment=SERVER_PORT=8081
+      Environment=APP_ENVIRONMENT=production
+      EnvironmentFile=-/opt/simpleweb/prod/app.env
+      ExecStart=/usr/bin/java -jar /opt/simpleweb/prod/simpleweb.jar
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - [install, -d, -o, simpleweb, -g, simpleweb, -m, "0755", /opt/simpleweb/test]
+  - [install, -d, -o, simpleweb, -g, simpleweb, -m, "0755", /opt/simpleweb/prod]
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, simpleweb-test.service, simpleweb-prod.service]

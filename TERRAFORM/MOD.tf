@@ -23,6 +23,11 @@ resource "azurerm_public_ip" "lab" {
   sku                 = "Standard"
 
   tags = local.default_tags
+
+  lifecycle {
+    # The shared subscription injects FirstPartyUsage and zone metadata.
+    ignore_changes = [ip_tags, zones]
+  }
 }
 
 resource "azurerm_network_interface" "lab" {
@@ -54,7 +59,7 @@ resource "azurerm_windows_virtual_machine" "lab" {
   os_disk {
     name                 = "${local.lab_name}-osdisk-${local.resource_suffix}"
     caching              = "ReadWrite"
-    storage_account_type = "Premium_LRS"
+    storage_account_type = "Standard_LRS"
   }
 
   source_image_reference {
@@ -111,16 +116,142 @@ resource "azurerm_service_plan" "lab" {
 }
 
 resource "azurerm_windows_web_app" "lab" {
-  name                = "gh200-web-${local.resource_suffix}"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  service_plan_id     = azurerm_service_plan.lab.id
+  name                                           = "gh200-web-${local.resource_suffix}"
+  location                                       = azurerm_resource_group.rg.location
+  resource_group_name                            = azurerm_resource_group.rg.name
+  service_plan_id                                = azurerm_service_plan.lab.id
+  ftp_publish_basic_authentication_enabled       = false
+  webdeploy_publish_basic_authentication_enabled = false
 
   site_config {
     application_stack {
       current_stack  = "dotnet"
       dotnet_version = "v8.0"
     }
+  }
+
+  tags = local.default_tags
+}
+
+## LAB-LINUX-VM
+resource "tls_private_key" "linux" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "azurerm_subnet" "linux" {
+  name                 = "${local.lab_name}-linux-subnet-${local.resource_suffix}"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.lab.name
+  address_prefixes     = ["10.10.2.0/24"]
+}
+
+resource "azurerm_network_security_group" "linux" {
+  name                = "${local.lab_name}-linux-nsg-${local.resource_suffix}"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  # The two app environments are public for classroom verification. The shared
+  # subscription removes persistent Internet SSH rules; the trainer opens port
+  # 22 only immediately before the optional SSH comparison and removes it after.
+  security_rule {
+    name                       = "AllowTestAppFromInternet"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "8080"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "AllowProductionAppFromInternet"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "8081"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
+  }
+
+  tags = local.default_tags
+}
+
+resource "azurerm_subnet_network_security_group_association" "linux" {
+  subnet_id                 = azurerm_subnet.linux.id
+  network_security_group_id = azurerm_network_security_group.linux.id
+
+  lifecycle {
+    # Azure sometimes returns the resource group segment with different casing,
+    # which otherwise creates a false ForceNew diff for the same subnet ID.
+    ignore_changes = [subnet_id]
+  }
+}
+
+resource "azurerm_public_ip" "linux" {
+  name                = "${local.lab_name}-linux-pip-${local.resource_suffix}"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+
+  tags = local.default_tags
+
+  lifecycle {
+    # The shared subscription injects FirstPartyUsage and zone metadata.
+    ignore_changes = [ip_tags, zones]
+  }
+}
+
+resource "azurerm_network_interface" "linux" {
+  name                = "${local.lab_name}-linux-nic-${local.resource_suffix}"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+
+  ip_configuration {
+    name                          = "${local.lab_name}-linux-ipconfig-${local.resource_suffix}"
+    subnet_id                     = azurerm_subnet.linux.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.linux.id
+  }
+
+  tags = local.default_tags
+}
+
+resource "azurerm_linux_virtual_machine" "lab" {
+  name                            = "${local.lab_name}-linux-${local.resource_suffix}"
+  location                        = azurerm_resource_group.rg.location
+  resource_group_name             = azurerm_resource_group.rg.name
+  network_interface_ids           = [azurerm_network_interface.linux.id]
+  size                            = local.linux_vm_size
+  admin_username                  = local.linux_admin
+  disable_password_authentication = true
+  custom_data                     = base64encode(file("${path.module}/cloud-init-java.yaml"))
+
+  admin_ssh_key {
+    username   = local.linux_admin
+    public_key = tls_private_key.linux.public_key_openssh
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  os_disk {
+    name                 = "${local.lab_name}-linux-osdisk-${local.resource_suffix}"
+    caching              = "ReadWrite"
+    storage_account_type = "Premium_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
+    version   = "latest"
   }
 
   tags = local.default_tags

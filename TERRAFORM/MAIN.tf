@@ -1,6 +1,8 @@
 terraform {
   required_version = ">= 1.0"
 
+  backend "azurerm" {}
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -13,6 +15,10 @@ terraform {
     http = {
       source  = "hashicorp/http"
       version = "~> 3.5"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
     }
   }
 }
@@ -47,6 +53,8 @@ locals {
   group_name      = "GH200-${var.group_postfix}"
   location        = "japaneast"
   vm_size         = "Standard_B4ms"
+  linux_vm_size   = "Standard_B2s"
+  linux_admin     = "azureuser"
   random_str      = "ksh"
   lab_name        = "lab"
   resource_suffix = "${var.group_postfix}-${local.random_str}"
