@@ -8,7 +8,8 @@ backup/fallback stack。課堂中應由 trainer 現場建立 Azure resources；�
 
 此 stack 建立：
 
-- 一部 Windows Server 2022 VM，包含 Microsoft Entra ID login extension 與 IIS。
+- 一部具 system-assigned managed identity 的 Windows Server 2022 VM，包含
+  Microsoft Entra ID login extension 與 IIS。
   預定用於 **M07 — Manage GitHub Actions in the enterprise** 的 self-hosted runner demo，
   也可用來展示 runner infrastructure。
 - 一個 Windows App Service plan 與 Windows Web App。
@@ -22,6 +23,9 @@ backup/fallback stack。課堂中應由 trainer 現場建立 Azure resources；�
 - 可建立 resources 的 Azure subscription
 - 在 `japaneast` region 具備所需 quota
 - 由環境提供 Azure subscription，例如設定 `ARM_SUBSCRIPTION_ID`
+- 若要使用 Microsoft Entra ID 登入 VM，登入者需在 VM 或其上層 scope 取得
+  `Virtual Machine Administrator Login` 或 `Virtual Machine User Login` role；
+  `Owner` / `Contributor` 本身不授予 VM 登入權限。
 
 ## Variables
 
@@ -84,6 +88,10 @@ Remove-Item Env:\TF_VAR_user_password
 - VM 建立完成後，仍須手動將 self-hosted runner 註冊至 GitHub repository、
   organization 或 enterprise。請參考
   [Adding self-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)。
+- Stack 會建立 `AADLoginForWindows` 所需的 system-assigned managed identity，但不替任何
+  trainer/user 建立 VM login role assignment。使用 Microsoft Entra ID 登入前，請依
+  [Sign in to a Windows VM using Microsoft Entra ID and Azure RBAC](https://learn.microsoft.com/en-us/entra/identity/devices/howto-vm-sign-in-azure-ad-windows#configure-role-assignments)
+  指派 `Virtual Machine Administrator Login` 或 `Virtual Machine User Login`。
 - `user_password` 標示為 sensitive 可避免一般 CLI output 顯示，但 Terraform state
   仍會保存 VM administrator password；請使用安全的 remote backend 與適當 access control。
 - Windows Web App 使用 .NET 8。部署前應確認課程 sample application 的 target framework

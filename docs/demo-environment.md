@@ -82,7 +82,7 @@ M03 的現場目標是「GitHub Actions 把應用程式部署到 Azure Web App�
 | Virtual network / subnet | `lab-vnet-<group_postfix>-ksh` / `default` | VM 網路 |
 | Public IP（Standard、Static） | `lab-pip-<group_postfix>-ksh` | VM 的 public IP |
 | Network interface | `lab-nic-<group_postfix>-ksh` | 接到 VM |
-| Windows Server 2022 VM（`Standard_B4ms`） | `lab-vm-<group_postfix>-ksh` | **M07** self-hosted runner **主機**（尚未安裝 runner） |
+| Windows Server 2022 VM（`Standard_B4ms`，system-assigned identity） | `lab-vm-<group_postfix>-ksh` | **M07** self-hosted runner **主機**（尚未安裝 runner） |
 | `AADLoginForWindows` extension | `lab-aad-<group_postfix>-ksh` | Microsoft Entra ID 登入 VM |
 | Custom Script extension（安裝 IIS） | `lab-script-<group_postfix>-ksh` | 在 VM 上放一個簡單的 IIS 頁面 |
 | Windows App Service plan（`S1`） | `lab-app-plan-<group_postfix>-ksh` | **M03** Web App 的 plan |
@@ -139,6 +139,9 @@ Remove-Item Env:\TF_VAR_user_password
 ### 此 stack 做不到的事
 
 - **不會**在 VM 上安裝 GitHub Actions runner，也**不會**向 GitHub 註冊 runner。
+- **不會**替 trainer/user 建立 VM login role assignment。若使用 Microsoft Entra ID
+  登入，必須先在 VM 或其上層 scope 指派 `Virtual Machine Administrator Login` 或
+  `Virtual Machine User Login`；`Owner` / `Contributor` 本身不授予登入權限。
 - **不會**建立 demo GitHub repository、workflow、secret、package 或 custom action。
 - **沒有** application data plane；Web App 在首次部署前是空的 runtime。
 - **沒有** Network Security Group 或 inbound rule。Public IP 已掛在 NIC 上，但 RDP／IIS 連線需要講師另外用限制來源 IP 的規則（若課堂需要連進去）。
@@ -150,7 +153,10 @@ Terraform 只給你一台 Windows VM。Runner 註冊永遠是課堂上的手動�
 
 建議流程（每一步都由講師執行，且不要把 token 貼進聊天或 repo）：
 
-1. 確認 VM 已存在且你能登入（Entra ID login 或 local admin）。本文不記載連線指令的成功紀錄。
+1. 確認 VM 已存在且你能登入。使用 Microsoft Entra ID 時，先依
+   [Microsoft Entra ID VM sign-in requirements](https://learn.microsoft.com/en-us/entra/identity/devices/howto-vm-sign-in-azure-ad-windows#requirements)
+   完成 `Virtual Machine Administrator Login` 或 `Virtual Machine User Login` role
+   assignment；否則使用建立 VM 時設定的 local admin。本文不記載連線成功紀錄。
 2. 在 GitHub 的 repository 或 organization runner 頁面，**即將 demo 前**才建立 registration token。Token 是短效的；過期就重開，不要預先產好放著。
 3. 在 VM 上依官方文件下載並設定 runner，註冊到 **repository 或 organization**（課堂範圍用哪個層級，選最小足夠的那個）。
 4. 加上可辨識的 label（例如只給這堂課用的 label），workflow 用 `runs-on:` 對準該 label，避免誤用到別的 runner。

@@ -47,6 +47,10 @@ resource "azurerm_windows_virtual_machine" "lab" {
   network_interface_ids = [azurerm_network_interface.lab.id]
   size                  = local.vm_size
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   os_disk {
     name                 = "${local.lab_name}-osdisk-${local.resource_suffix}"
     caching              = "ReadWrite"
