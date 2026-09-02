@@ -11,7 +11,7 @@ Build, secure, troubleshoot, and govern software-development automation with Git
 ## Course
 :::success
 Date: 20260903
-Course ID: 89283
+Course ID: 109066
 :::
 
 :::info
@@ -23,38 +23,34 @@ Post Course Survey: [https://aka.ms/gh200survey](https://aka.ms/gh200survey)
 [Course GH-200 简体中文版本](https://learn.microsoft.com/zh-cn/training/courses/gh-200t00)
 [Course GH-200 正體中文版本](https://learn.microsoft.com/zh-tw/training/courses/gh-200t00)
 
-[Automate your workflow with GitHub Actions — Part 1 of 2](https://learn.microsoft.com/en-us/training/paths/github-actions/)
-[Automate your workflow with GitHub Actions — Part 2 of 2](https://learn.microsoft.com/en-us/training/paths/github-actions-2/)
-
 ## Infos
 [Learner Experience Portal](https://esi.microsoft.com/)
 [ESI Support](https://aka.ms/esisupport)
 
 ## Lab
-The exercises run in your own GitHub account. Module 03 also requires an Azure subscription.
+### Skillable lab system
+[ESI Labs](https://aka.ms/esilab)
+:::success
+Training key: 53F35FFC16441C69
+:::
 
-### M01 - Automate development tasks
+### Instructions
+#### M01 - Automate development tasks
 [Exercise - Create and run a basic GitHub Actions workflow](https://learn.microsoft.com/en-us/training/modules/github-actions-automate-tasks/3-exercise-create-container-action)
 
-### M02 - Continuous integration
+#### M02 - Continuous integration
 [Exercise - Create the CI workflow on GitHub](https://learn.microsoft.com/en-us/training/modules/github-actions-ci/3-exercise-ci-workflow-github)
 
-### M03 - Build and deploy to Azure
+#### M03 - Build and deploy to Azure
 [Exercise - Create a workflow that deploys a web app to Azure](https://learn.microsoft.com/en-us/training/modules/github-actions-cd/3-create-workflow-deploy-azure)
 [Exercise - Work with workflow artifacts in GitHub Actions](https://learn.microsoft.com/en-us/training/modules/github-actions-cd/exercise-2)
 [Exercise - Deploy a containerized app to Azure with GitHub Actions](https://learn.microsoft.com/en-us/training/modules/github-actions-cd/exercise)
 
-### M04 - GitHub Script
-[Exercise - Using GitHub Script in GitHub Actions](https://learn.microsoft.com/en-us/training/modules/automate-github-using-github-script/3-use-github-script)
-
-### M05 - GitHub Packages
+#### M05 - GitHub Packages
 [Exercise - Publish to a GitHub Packages registry](https://learn.microsoft.com/en-us/training/modules/github-actions-packages/3-exercise-github-packages-docker-registry)
 
-### M06 - Custom actions
+#### M06 - Custom actions
 [Exercise - Create a custom JavaScript GitHub action](https://learn.microsoft.com/en-us/training/modules/create-custom-github-actions/exercise-create-custom-action)
-
-### M07 - Enterprise management
-Module 07 has no dedicated hands-on exercise.
 
 ## Course Info
 ![Course overview](https://mdcontent.yu.money/contents/f008fce23003844339a3ac100.zh-TW.png)
