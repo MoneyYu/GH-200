@@ -89,8 +89,9 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 SSH-only／OIDC-webapp（`07.deploy-webapp`）／same-VM-runner 主線設計；**下表描述的
 SSH-only 主線與 `07` OIDC 對照，現在是兩個 repo 共同的現行主線**，只是各自維護獨立的
 workflow 檔案、GitHub 設定與部署身分（`demo-java-04` 至 `demo-java-07` 對
-`04.deploy-test` 至 `07.deploy-webapp`），且**尚未有該對齊後版本的 live workflow run
-證據**（目前只完成靜態驗證）；課堂這一段 demo 只使用 `MoneyYu/GH-200` 的 workflows。
+`04.deploy-test` 至 `07.deploy-webapp`）；**新 Azure CLI 取代路徑尚無成功的 live run 證據**，
+但 `docs/demo-environment` 已記錄 OIDC 成功、OneDeploy 400 失敗的 action-path 證據；課堂這一段
+demo 只使用 `MoneyYu/GH-200` 的 workflows。
 
 | 項目 | 課堂呈現（`MoneyYu/GH-200`；class repo 現行對齊後的編號相同，但獨立維護） |
 |---|---|
