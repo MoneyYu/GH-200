@@ -122,12 +122,13 @@ behavioral — this is not a place for narrative history.
   `linux_ssh_public_key` variable, `AllowSshFromAzureCloud` NSG rule, runner-preinstall
   extension), the user authorized **exactly one** reviewed Terraform apply, to run only after its
   plan has been reviewed and the implementation gate has passed. Only `plan` has been run so far
-  for that refactor — **do not claim this apply has happened.** Do not run this apply, any
-  further apply, or any destroy **without a new, explicit user authorization**; destroy
-  additionally always requires a new explicit user request **and confirmation** before it may
-  run. Do not write generic "trainer may run apply/destroy whenever" instructions anywhere in
-  this repo — every apply or destroy invitation must carry this authorization/confirmation
-  gating.
+  for that refactor — **do not claim this apply has happened.** This current authorization is
+  sufficient for that one reviewed SSH-only-refactor apply once plan review and the implementation
+  gate have passed; no new authorization is required for that one action. Every additional apply
+  still needs a new explicit user authorization, and any destroy always needs a new explicit user
+  request and confirmation before it may run. Do not write generic "trainer may run
+  apply/destroy whenever" instructions anywhere in this repo — every apply or destroy invitation
+  must carry this authorization/confirmation gating.
 - Preserve the existing unmanaged backend storage: never delete the `tfstate` container or the
   now-orphaned `deployments` Blob container (leftover from the pre-SSH artifact-transport design)
   without a new explicit user instruction; they are out of Terraform's management scope.
