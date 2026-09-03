@@ -25,7 +25,7 @@
 
 Progressive workflow 是 `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`。`07.deploy-ssh`、`08.selfhosted-runner`、`09.troubleshooting` 是對照／診斷材料，而不是主線的替代方案。
 
-### 2026-09-03 已部署環境
+### 2026-09-03 班級 repo 已部署環境
 
 | 項目 | 實際值／驗證 |
 |---|---|
@@ -39,6 +39,35 @@ Progressive workflow 是 `01.build` → `02.build-test` → `03.package-artifact
 | SSH deployment | [Run 33659763233](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33659763233) |
 | Ephemeral self-hosted runner | [Run 33660507745](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33660507745)；完成後 runner 自動解除 |
 | Troubleshooting failure | [Run 33660678534](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33660678534) — 故意失敗的教材 |
+
+以上 run 都來自 public class repo `MoneyDemo/20260903-GH200`，用來示範真正的
+required-reviewer approval gate。
+
+### MoneyYu/GH-200 self-contained workflows
+
+GH-200 自己是 private repo，因此 `demo-java-04/05/06` 不使用匿名 GitHub Release。
+流程改為：
+
+1. Workflow 以 Azure OIDC 登入。
+2. 將每個 commit 的 jar、`build-sha.txt`、SHA-256 digest 上傳到 private Blob path
+   `deployments/builds/<commit-sha>/`。
+3. Linux VM 以 system-assigned managed identity 取得 Storage token、下載並驗證 digest。
+4. Run Command 回傳 `DEPLOY_OK`，外部 smoke test 再比對 `/api/info` build SHA。
+
+目前已配置：
+
+| 項目 | 值／權限 |
+|---|---|
+| Storage account | `gh200state0903ksh`（shared key disabled） |
+| Container | `deployments` |
+| GitHub variable | `AZURE_STORAGE_ACCOUNT=gh200state0903ksh` |
+| OIDC service principal | Container scope `Storage Blob Data Contributor` |
+| Linux VM managed identity | Container scope `Storage Blob Data Reader` |
+
+MoneyYu organization 的方案不支援 Environment required reviewers（API 回傳 HTTP 422）。
+因此 GH-200 的 `demo-java-06-full-pipeline` 只允許手動觸發，且要求
+`confirm_production=deploy`；這是避免誤觸的確認，不是 separation of duties。要展示
+真正的 reviewer gate，使用上表的 MoneyDemo class repo。
 
 ### Azure OIDC federated credential
 

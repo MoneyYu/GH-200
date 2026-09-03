@@ -77,6 +77,56 @@ terraform init `
 不要刪除 storage account/container，也不要把 state 下載後 commit。若要交接講師，請在
 storage account scope 指派最小必要的 data-plane role；不要啟用 shared key。
 
+### Private deployment artifact container
+
+因 `MoneyYu/GH-200` 是 private repo，Java CD workflows 使用同一個 AAD-only storage
+account 的獨立 `deployments` container，不使用匿名 GitHub Release URL。Backend
+`tfstate` container 與 application artifact container 的 RBAC scope 完全分開。
+
+一次性 bootstrap（目前環境已完成）：
+
+```powershell
+$storageAccount = "gh200state0903ksh"
+$resourceGroup = "GH200-0903"
+$container = "deployments"
+$accountId = az storage account show `
+  --resource-group $resourceGroup `
+  --name $storageAccount `
+  --query id --output tsv
+$containerScope = "$accountId/blobServices/default/containers/$container"
+
+az storage container create `
+  --account-name $storageAccount `
+  --name $container `
+  --auth-mode login
+
+# GitHub OIDC service principal 的 object ID（不是 client/application ID）
+$deploymentPrincipalId = "<OIDC_SERVICE_PRINCIPAL_OBJECT_ID>"
+az role assignment create `
+  --assignee-object-id $deploymentPrincipalId `
+  --assignee-principal-type ServicePrincipal `
+  --role "Storage Blob Data Contributor" `
+  --scope $containerScope
+
+$vmPrincipalId = az vm show `
+  --resource-group $resourceGroup `
+  --name "lab-linux-0903-ksh" `
+  --query identity.principalId --output tsv
+az role assignment create `
+  --assignee-object-id $vmPrincipalId `
+  --assignee-principal-type ServicePrincipal `
+  --role "Storage Blob Data Reader" `
+  --scope $containerScope
+
+gh variable set AZURE_STORAGE_ACCOUNT `
+  --repo MoneyYu/GH-200 `
+  --body $storageAccount
+```
+
+Workflows 04/06 以 `az storage blob upload --auth-mode login` 寫入
+`deployments/builds/<commit-sha>/`；VM 透過 IMDS managed-identity token 讀取。不要把
+GitHub token、Storage key 或 SAS token 傳入 Run Command。
+
 ## Usage
 
 ```powershell
