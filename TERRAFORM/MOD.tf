@@ -183,7 +183,8 @@ resource "azurerm_virtual_machine_extension" "linux_runner" {
   virtual_machine_id         = azurerm_linux_virtual_machine.lab.id
 
   settings = jsonencode({
-    commandToExecute = <<-EOT
+    # Normalize CRLF to LF so Azure Linux Custom Script does not fail in /bin/sh.
+    commandToExecute = replace(<<-EOT
       set -e
       RUNNER_VERSION="2.337.0"
       RUNNER_DIR="/opt/actions-runner"
@@ -201,6 +202,7 @@ resource "azurerm_virtual_machine_extension" "linux_runner" {
       fi
       chown -R ${local.linux_admin}:${local.linux_admin} "$RUNNER_DIR"
     EOT
+    , "\r\n", "\n")
   })
 
   tags = local.default_tags
