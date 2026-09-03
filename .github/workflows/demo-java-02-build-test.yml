@@ -1,0 +1,65 @@
+# 02 - Build + Test，並把結果寫進 Job Summary
+#
+# 教學重點 (Module 1 / Module 2)
+#   - 在 CI 跑測試，讓問題在 merge 之前就被擋下來
+#   - pull_request 觸發：PR 上會出現 status check
+#   - $GITHUB_STEP_SUMMARY：把重點寫成 Markdown 顯示在 run 摘要頁，
+#     學員不用翻 log 就能看到結果（Module 2 讀 log 的第一步）
+#   - if: always() 讓「測試失敗時仍然上傳報告」
+name: demo-java-02-build-test
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - 'mvnw'
+      - '.mvn/**'
+      - '.github/workflows/demo-java-02-build-test.yml'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # verify 會跑 unit test + integration test，並打包出 target/simpleweb.jar
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      # 測試報告是 build 的產出物，即使失敗也要留下來供除錯
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: target/surefire-reports/
+          if-no-files-found: warn
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## 建置結果"
+            echo ""
+            echo "| 項目 | 內容 |"
+            echo "| --- | --- |"
+            echo "| Commit | \`${GITHUB_SHA:0:7}\` |"
+            echo "| 觸發事件 | \`${GITHUB_EVENT_NAME}\` |"
+            echo "| 結果 | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

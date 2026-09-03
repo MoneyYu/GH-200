@@ -1,0 +1,116 @@
+# 04 - Deploy 到「測試環境」：OIDC + az vm run-command
+#
+# 教學重點 (Module 1 / Module 5)
+#   - environment: test  → 綁定 GitHub Environment，可掛保護規則與環境層級 secret
+#   - permissions: id-token: write  → 少了這行，OIDC 一定失敗（最常見的坑）
+#   - azure/login 用 OIDC：GitHub 換發「短期 token」給 Azure，
+#     GitHub 這邊「不需要存任何長期的 Azure 密碼」
+#   - az vm run-command：不用開 SSH port、不用存私鑰，就能在 VM 上執行指令
+#
+# 部署載荷怎麼上 VM？
+#   本 repo 是 public，所以把 jar 發佈成 GitHub Release asset，
+#   VM 端用 curl 匿名下載即可，不需要額外的儲存體或憑證。
+name: demo-java-04-deploy-test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # 發佈 release asset 需要寫入權限
+  id-token: write # OIDC 換發 token 必要！
+
+concurrency:
+  group: simpleweb-deploy
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: build-${{ github.sha }}
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    # 這一行讓 run 出現在 Environments 頁面，也是套用保護規則的依據
+    environment:
+      name: test
+      url: http://${{ vars.VM_PUBLIC_IP }}:8080
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      # 把 jar 發佈成一個「滾動式」的 pre-release，讓 VM 可以直接下載
+      - name: Publish deployable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > build-sha.txt
+          sha256sum target/simpleweb.jar | awk '{print $1 "  simpleweb.jar"}' > simpleweb.jar.sha256
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 \
+            || gh release create "$RELEASE_TAG" --prerelease --title "Rolling build" --notes "由 CI 自動更新的最新可部署版本"
+          gh release upload "$RELEASE_TAG" target/simpleweb.jar build-sha.txt simpleweb.jar.sha256 --clobber
+
+      # 使用 OIDC 登入 Azure（沒有任何長期密碼存在 GitHub）
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # 共享課程訂閱可能有外部 auto-shutdown；部署前先確保 VM 正在執行。
+      - name: Ensure VM is running
+        run: |
+          az vm start \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_VM_NAME }}"
+
+      - name: Deploy to test VM
+        env:
+          JAR_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/simpleweb.jar
+          DIGEST_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/simpleweb.jar.sha256
+        run: |
+          output="$(az vm run-command invoke \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_VM_NAME }}" \
+            --command-id RunShellScript \
+            --scripts "
+              set -eu
+              curl -fsSL --retry 3 -o /tmp/simpleweb.jar '$JAR_URL'
+              curl -fsSL --retry 3 -o /tmp/simpleweb.jar.sha256 '$DIGEST_URL'
+              cd /tmp
+              sha256sum -c simpleweb.jar.sha256
+              install -o simpleweb -g simpleweb -m 0644 /tmp/simpleweb.jar /opt/simpleweb/test/simpleweb.jar
+              printf 'APP_BUILD_SHA=%s\nAPP_BUILD_TIME=%s\n' '${{ github.sha }}' \"\$(date -u +%FT%TZ)\" > /opt/simpleweb/test/app.env
+              systemctl restart simpleweb-test
+              sleep 5
+              systemctl is-active simpleweb-test
+              echo DEPLOY_OK
+            " \
+            --query "value[0].message" -o tsv)"
+          echo "$output"
+          printf '%s' "$output" | grep -q DEPLOY_OK
+
+      # 部署完一定要驗證，不要只看 workflow 綠燈就當成功
+      - name: Smoke test
+        run: |
+          body=''
+          for i in $(seq 1 10); do
+            body="$(curl -fsS "http://${{ vars.VM_PUBLIC_IP }}:8080/api/info" || true)"
+            if printf '%s' "$body" | grep -q "${{ github.sha }}"; then
+              echo "$body"
+              echo "" && echo "測試環境部署成功"
+              exit 0
+            fi
+            echo "等待應用程式啟動... ($i/10)" && sleep 6
+          done
+          echo "應用程式在時間內沒有回報這次 commit" >&2
+          echo "最後回應：$body" >&2
+          exit 1

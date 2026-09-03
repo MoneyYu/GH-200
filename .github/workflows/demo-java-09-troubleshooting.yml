@@ -1,0 +1,57 @@
+# 09 - 除錯練習：這支「故意」會失敗（Module 2）
+#
+# 這是給學員練習「看 log 找問題」用的。裡面種了 3 個真實世界常見的錯：
+#
+#   Bug 1：忘記 actions/checkout          → Maven 找不到 pom.xml
+#   Bug 2：job 之間沒有 needs             → 讀不到上一個 job 的 output
+#   Bug 3：引用了不存在的 step id         → 取到空值，後續判斷失效
+#
+# 除錯流程（講師示範一次，學員再自己做）
+#   1. 從 Actions 頁面點進紅色的 run
+#   2. 看「哪一個 job」紅了 → 展開「哪一個 step」
+#   3. 讀錯誤訊息「最上面那幾行」，不是最下面
+#   4. 需要更多細節時，在 repository 加這兩個 secret 後重跑：
+#        ACTIONS_STEP_DEBUG   = true
+#        ACTIONS_RUNNER_DEBUG = true
+#   5. 修好之後用 Re-run failed jobs 只重跑失敗的部分，省時間
+name: demo-java-09-troubleshooting
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  broken-build:
+    runs-on: ubuntu-latest
+    outputs:
+      # Bug 3：這裡引用的 step id 是 meta，但下面那個 step 的 id 其實叫 metadata
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      # Bug 1：這裡少了 - uses: actions/checkout@v5
+      #        runner 上是空的，所以 ./mvnw 根本不存在
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build
+        run: ./mvnw -B verify
+
+      - name: Collect metadata
+        id: metadata
+        run: echo "version=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+  report:
+    runs-on: ubuntu-latest
+    # Bug 2：少了 needs: broken-build
+    #        這個 job 會和上面那個「同時」開始，而且讀不到它的 outputs
+    steps:
+      - name: Show version
+        run: |
+          echo "版本是：${{ needs.broken-build.outputs.version }}"
+          if [ -z "${{ needs.broken-build.outputs.version }}" ]; then
+            echo "拿不到版本號，前一個 job 的 output 沒有正確傳過來" >&2
+            exit 1
+          fi

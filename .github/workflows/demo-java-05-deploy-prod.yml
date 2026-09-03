@@ -1,0 +1,129 @@
+# 05 - Deploy 到「正式環境」：Approval Gate
+#
+# 教學重點 (Module 5)
+#   - environment: production 掛上 required reviewers 之後，
+#     這個 job 會「暫停」等人按核准，不是壞掉了
+#   - Environment 還可以掛：wait timer、限制哪些分支能部署、環境層級 secret
+#   - 這裡刻意「不重新 build」，而是部署 04 已經驗證過的同一個 artifact，
+#     這就是 build once, deploy many —— 避免每個環境跑出不一樣的產物
+name: demo-java-05-deploy-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 輸入 deploy 以確認要部署到正式環境
+        required: true
+        default: ''
+      build_sha:
+        description: 要 promote 的完整 40 字元 commit SHA
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simpleweb-deploy
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check confirmation input
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "deploy" ]; then
+            echo "請在觸發時輸入 deploy 以確認。" >&2
+            exit 1
+          fi
+
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: guard
+    permissions:
+      contents: read
+      id-token: write
+    # production 環境設定了 required reviewer，
+    # 所以這個 job 會停在 Waiting，直到有人核准為止。
+    environment:
+      name: production
+      url: http://${{ vars.VM_PUBLIC_IP }}:8081
+
+    steps:
+      - name: Resolve and validate promoted build SHA
+        id: promoted
+        env:
+          REQUESTED_SHA: ${{ inputs.build_sha }}
+        run: |
+          if ! printf '%s' "$REQUESTED_SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "輸入的 build SHA 格式無效" >&2
+            exit 1
+          fi
+          release_sha="$(curl -fsSL "${{ github.server_url }}/${{ github.repository }}/releases/download/build-${REQUESTED_SHA}/build-sha.txt")"
+          if [ "$release_sha" != "$REQUESTED_SHA" ]; then
+            echo "Release metadata 與要求 promote 的 SHA 不一致" >&2
+            exit 1
+          fi
+          echo "sha=$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # 共享課程訂閱可能有外部 auto-shutdown；部署前先確保 VM 正在執行。
+      - name: Ensure VM is running
+        run: |
+          az vm start \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_VM_NAME }}"
+
+      # 部署指定 commit 已經驗證過的同一份 jar
+      - name: Deploy to production VM
+        env:
+          JAR_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/build-${{ steps.promoted.outputs.sha }}/simpleweb.jar
+          DIGEST_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/build-${{ steps.promoted.outputs.sha }}/simpleweb.jar.sha256
+          EXPECTED_SHA: ${{ steps.promoted.outputs.sha }}
+        run: |
+          output="$(az vm run-command invoke \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ vars.AZURE_VM_NAME }}" \
+            --command-id RunShellScript \
+            --scripts "
+              set -eu
+              curl -fsSL --retry 3 -o /tmp/simpleweb.jar '$JAR_URL'
+              curl -fsSL --retry 3 -o /tmp/simpleweb.jar.sha256 '$DIGEST_URL'
+              cd /tmp
+              sha256sum -c simpleweb.jar.sha256
+              install -o simpleweb -g simpleweb -m 0644 /tmp/simpleweb.jar /opt/simpleweb/prod/simpleweb.jar
+              printf 'APP_BUILD_SHA=%s\nAPP_BUILD_TIME=%s\n' '$EXPECTED_SHA' \"\$(date -u +%FT%TZ)\" > /opt/simpleweb/prod/app.env
+              systemctl restart simpleweb-prod
+              sleep 5
+              systemctl is-active simpleweb-prod
+              echo DEPLOY_OK
+            " \
+            --query "value[0].message" -o tsv)"
+          echo "$output"
+          printf '%s' "$output" | grep -q DEPLOY_OK
+
+      - name: Smoke test
+        env:
+          EXPECTED_SHA: ${{ steps.promoted.outputs.sha }}
+        run: |
+          body=''
+          for i in $(seq 1 10); do
+            body="$(curl -fsS "http://${{ vars.VM_PUBLIC_IP }}:8081/api/info" || true)"
+            if printf '%s' "$body" | grep -q "$EXPECTED_SHA"; then
+              echo "$body"
+              echo "" && echo "正式環境部署成功"
+              exit 0
+            fi
+            echo "等待應用程式啟動... ($i/10)" && sleep 6
+          done
+          echo "應用程式在時間內沒有回報 promoted build SHA：$EXPECTED_SHA" >&2
+          echo "最後回應：$body" >&2
+          exit 1

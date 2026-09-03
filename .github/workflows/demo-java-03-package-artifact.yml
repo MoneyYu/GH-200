@@ -1,0 +1,75 @@
+# 03 - Package：把 jar 當成 artifact 在 job 之間傳遞
+#
+# 教學重點 (Module 1)
+#   - needs:  建立 job 之間的相依，讓 package 等 build 完成才跑
+#   - 不同 job 跑在「不同台」runner 上，檔案系統不共用！
+#     要傳檔案就一定要用 artifact（upload-artifact / download-artifact）
+#
+# Artifact vs Cache（客戶要求 Cache 只講概念，不深入）
+#   - Cache    = 為了「加速」。內容掉了只是變慢，不影響正確性。例如相依套件。
+#                本次依客戶要求只說明概念，不在 workflow 實作 cache。
+#   - Artifact = 為了「保存與交付產出物」。這是你要部署出去的東西。
+name: demo-java-03-package-artifact
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - 'mvnw'
+      - '.mvn/**'
+      - '.github/workflows/demo-java-03-package-artifact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      # 只上傳「要部署的那一個檔案」，不要整個 target/ 都丟上去
+      - name: Upload deployable jar
+        uses: actions/upload-artifact@v7
+        with:
+          name: simpleweb-jar
+          path: target/simpleweb.jar
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    runs-on: ubuntu-latest
+    # 沒有 needs: build，這個 job 會和 build 同時開始，然後找不到 artifact
+    needs: build
+    steps:
+      - name: Download deployable jar
+        uses: actions/download-artifact@v7
+        with:
+          name: simpleweb-jar
+          path: ./dist
+
+      - name: Inspect the package
+        run: |
+          ls -lh ./dist
+          echo "SHA256: $(sha256sum ./dist/simpleweb.jar | cut -d' ' -f1)"
+
+      - name: Write job summary
+        run: |
+          {
+            echo "## Package"
+            echo ""
+            echo "- 檔案：\`simpleweb.jar\`"
+            echo "- 大小：$(du -h ./dist/simpleweb.jar | cut -f1)"
+            echo "- 來源 commit：\`${GITHUB_SHA:0:7}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

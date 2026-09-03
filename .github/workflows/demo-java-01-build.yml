@@ -1,0 +1,46 @@
+# 01 - 最基本的 workflow：Build
+#
+# 教學重點 (Module 1)
+#   - workflow 檔案必須放在 .github/workflows/ 底下，副檔名 .yml 或 .yaml
+#   - on:  決定「什麼時候跑」
+#   - jobs: 決定「跑什麼」，每個 job 跑在一台獨立的 runner 上
+#   - steps: job 裡面依序執行的動作；uses = 呼叫別人寫好的 action，run = 執行指令
+name: demo-java-01-build
+
+# --- 觸發條件 (Events & Triggers) ---
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'pom.xml'
+      - 'mvnw'
+      - '.mvn/**'
+      - '.github/workflows/demo-java-01-build.yml'
+  # workflow_dispatch 讓你可以在 Actions 頁面按按鈕手動執行，
+  # 上課時非常好用：不用一直亂 push commit 就能重跑。
+  workflow_dispatch:
+
+# --- 最小權限 (Module 5: Least Privilege) ---
+# 這個 workflow 只需要讀原始碼，所以只給 contents: read。
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 沒有 checkout，runner 上就沒有你的程式碼，Maven 會找不到 pom.xml
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # 用 Maven Wrapper (./mvnw)，所以 runner 不需要事先安裝 Maven
+      - name: Compile
+        run: ./mvnw -B compile

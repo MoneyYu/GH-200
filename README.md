@@ -27,6 +27,16 @@ Post Course Survey: [https://aka.ms/gh200survey](https://aka.ms/gh200survey)
 
 [MoneyDemo/20260903-GH200](https://github.com/MoneyDemo/20260903-GH200) is the class repository for the progressive Java workflow demos and student labs.
 
+The same Java 21 / Spring Boot 4.1.1 demo source is also included directly in this repository
+(`pom.xml`, `src/`, Maven Wrapper, and `Dockerfile`). GH-200's active
+`demo-java-*` workflows let future deliveries build, test, package, and deploy the demo without
+recreating the class repository.
+
+`MoneyYu/GH-200` does not currently have a GitHub plan that supports required reviewers on
+Environments. Its full deployment workflow is therefore manual and requires the
+`confirm_production=deploy` input. Use the class repository above when demonstrating the real
+required-reviewer approval gate.
+
 ## Infos
 [Learner Experience Portal](https://esi.microsoft.com/)
 [ESI Support](https://aka.ms/esisupport)
