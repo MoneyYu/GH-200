@@ -299,7 +299,7 @@ workflow 檔案、GitHub 設定與部署身分（`demo-java-04` 至 `demo-java-0
   **不沿用** SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity（詳見
   [Trainer demo environment guide](demo-environment.md) 的「Azure RBAC for the 07 OIDC
   identity」）。
-- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照各有可展示的成功結果與 fallback 截圖；目前尚無 live workflow dispatch 證據，需課前實際 dispatch 驗證。
+- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照各有可展示的成功結果與 fallback 截圖；failed action-path dispatch 證據已存在（OIDC 成功後 OneDeploy 400），但新的 Azure CLI 取代步驟尚無成功的 live-dispatch 證據，需課前實際 dispatch 驗證。
 - [ ] `TERRAFORM/` 現行 stack 沒有 Windows VM 或 Windows Web App；若未來另有 C# demo 需求，需另行規劃基礎設施，不要把 Java jar 部署到 Linux Java Web App 以外的目標。
 
 ### 行政、連結與備援
