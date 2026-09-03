@@ -144,6 +144,12 @@ federated credential／Azure identity**：
   範圍與資料類型都與現在 `07` 需要的「只管理一個 Web App」不同；繼續共用等於讓兩個
   repo 的部署身分持有超出實際需要的 VM／Blob 權限，違反最小權限，也讓兩個 repo 的
   Azure 存取邊界糾纏在一起。
+- 兩個 repo 的 `07`／`demo-java-07-deploy-webapp` 現在改用專屬的 GitHub secret
+  `AZURE_WEBAPP_CLIENT_ID` 提供 client ID 給 `azure/login`，代表**這個 Web App 專用**的
+  federated identity，不再沿用舊有的 `AZURE_CLIENT_ID`。舊的 `AZURE_CLIENT_ID` 目前
+  **維持不動**，因為還有其他 VM／Blob 相關的既有使用者依賴它；等那些舊使用者全部
+  除役後才會處理 `AZURE_CLIENT_ID` 本身，本次變更範圍不含這件事。tenant ID／
+  subscription ID 仍沿用既有的 Environment secret 名稱，不受影響。
 
 ### Terraform outputs → GitHub variables（兩個 repo 都要各設一次）
 
@@ -206,6 +212,7 @@ Get-Content -Raw -LiteralPath $knownHostsPath |
 - [ ] 課前用 Azure CLI 確認並啟動（若已 deallocate）SSH 部署目標 VM；`04`/`05`/`06` 的 workflow 完全不含 Azure 登入，也不會自行啟動 VM，VM 未開機或 TCP/22 未開放時 SSH 連線步驟會快速失敗。
 - [ ] `VM_SSH_PRIVATE_KEY`（secret）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、`VM_SSH_HOST_KEY`（variables）已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo** 各自設定（見上方「Terraform outputs → GitHub variables」）；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts` 行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入，VM host key 輪替後需手動更新。
 - [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`（variables）已從 Terraform outputs（`web_app_name`、`web_app_url`）在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp` 專屬的 OIDC identity 已依上方「Azure RBAC for the 07 OIDC identity」在兩個 repo 各自建立，且範圍是精準的該 Linux Web App（`Website Contributor`），未沿用舊有的 VM／Blob 共用 identity。
+- [ ] `AZURE_WEBAPP_CLIENT_ID`（secret）已在**兩個 repo**各自設定，提供上述專屬 Web App identity 的 client ID 給 `07`／`demo-java-07-deploy-webapp` 的 `azure/login`；舊的 `AZURE_CLIENT_ID` 目前維持不動，等其他 VM／Blob 相關使用者全部除役後才處理。
 
 Self-hosted runner 不得接收不信任 fork pull request。它保留機器狀態，維護、修補、清理與安全隔離均由講師／管理者負責；runner group 應限縮可使用的 repository。
 
