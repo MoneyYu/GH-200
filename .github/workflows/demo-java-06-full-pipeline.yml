@@ -1,4 +1,4 @@
-# 06 - 完整流水線：Build → Test → Package → Deploy(test) → 核准 → Deploy(prod)
+# 06 - 完整流水線：Build → Test → Package → Deploy(test) → 明確確認 → Deploy(prod)
 #
 # 這支就是課程的終極目標：客戶希望學員上完課能自己寫出這樣一條流水線。
 #

@@ -41,6 +41,18 @@ Because GH-200 is private, its deployment workflows do not expose GitHub release
 uploads each commit's jar and SHA-256 digest to the private `deployments` Azure Blob container;
 the VM downloads them with its system-assigned managed identity.
 
+### Reusable Demo Environment
+
+- [Terraform deployment and operations guide](TERRAFORM/README.md)
+- [Java CI/CD workflows](.github/workflows/)
+- [Trainer demo environment guide](docs/demo-environment.md)
+
+`demo-java-01` through `06` are the main Build → Test → Package → Deploy path.
+`demo-java-07` requires the trainer to open the exact temporary `AllowSshForDemo` NSG rule first.
+`demo-java-08` requires registering an ephemeral runner with the `gh200` label; it otherwise stays
+queued by design. The `confirm_production=deploy` input prevents accidental deployment but does
+**not** provide separation of duties; use the MoneyDemo class repo for the real reviewer gate.
+
 ## Infos
 [Learner Experience Portal](https://esi.microsoft.com/)
 [ESI Support](https://aka.ms/esisupport)
