@@ -98,7 +98,13 @@ terraform plan -var "group_postfix=0903"
 ```
 
 > [!WARNING]
-> 本 repo 明確禁止 AI agent 執行 `terraform apply`。Trainer 檢查 plan 後，必須自行手動執行：
+> 本 repo 明確禁止 AI agent 執行 `terraform apply`。此 stack 在 SSH-only 重構之前，`GH200-0903`
+> 已有一次不同、已完成的歷史 apply（`18 added, 0 changed, 0 destroyed`，建立含 Windows VM/Web
+> App 的舊有 topology）。**針對 SSH-only 重構本身**（移除 Windows VM/Web App、改用
+> `linux_ssh_public_key`、加入 `AllowSshFromAzureCloud`、runner 預先安裝 extension），使用者僅
+> 授權 trainer 在檢閱過 plan 且通過 implementation gate 後手動執行**一次** reviewed apply；
+> 截至目前只跑過 `plan`，尚未實際 apply，**不得宣稱已套用到 Azure**。**未經使用者新的明確
+> 授權，不得再次執行 apply**：
 >
 > ```powershell
 > $env:TF_VAR_linux_ssh_public_key = (Get-Content -Raw "$HOME\.ssh\gh200-linux.pub").Trim()
@@ -129,7 +135,8 @@ ssh -i $keyPath azureuser@$(terraform output -raw linux_vm_public_ip)
 
 請像保護其他 private key 一樣限制該檔案的存取權。
 
-課程結束後，由 trainer 手動清除本 stack：
+`terraform destroy` **只能在使用者提出新的明確要求並確認後**，才由 trainer 手動執行；課程
+開始前絕對不得執行，也不得因為例行清理、policy 掃描或維運方便而自行觸發：
 
 ```powershell
 $env:TF_VAR_linux_ssh_public_key = (Get-Content -Raw "$HOME\.ssh\gh200-linux.pub").Trim()
@@ -179,11 +186,20 @@ ownership 設為 `simpleweb:simpleweb`。
 `terraform apply` 完成只代表 Azure VM control plane provisioning 已完成；第一次開機的
 cloud-init（包含 OpenJDK 21 安裝與 systemd units 建立）可能仍在背景執行。**先等待
 cloud-init 完成，再檢查 Java 與 services**，避免把正常的初始收斂誤判為部署失敗。驗證改用
-trainer 自己的 SSH private key 連線，**不要**印出 private key 內容或把它寫進任何 log：
+trainer 自己的 SSH private key 連線，**不要**印出 private key 內容或把它寫進任何 log。
+
+主機指紋**不使用** `StrictHostKeyChecking=accept-new`，也不使用 `ssh-keyscan` 或任何
+per-run TOFU（trust-on-first-use）；一律使用已釘選在 repository variable
+`VM_SSH_HOST_KEY` 的完整 OpenSSH `known_hosts` 行，搭配 `StrictHostKeyChecking=yes`、明確
+`UserKnownHostsFile` 與 `GlobalKnownHostsFile=/dev/null`。`VM_SSH_HOST_KEY` 必須先在受信任
+管道（例如 Azure serial console，或已用其他方式確認身分的初次連線）擷取並人工核對後才寫入
+該 repository variable；這裡只讀出已核對過的值，不重新掃描：
 
 ```powershell
 $linuxIp = terraform output -raw linux_vm_public_ip
 $keyPath = Join-Path $HOME ".ssh\gh200-linux"
+$knownHostsPath = Join-Path $HOME ".ssh\gh200-linux-known-hosts"
+gh variable get VM_SSH_HOST_KEY --repo MoneyYu/GH-200 | Set-Content -NoNewline $knownHostsPath
 $verifyScript = (@'
 set -e
 cloud-init status --wait --long || true
@@ -194,12 +210,17 @@ systemctl is-enabled simpleweb-test.service simpleweb-prod.service
 systemctl is-active simpleweb-test.service simpleweb-prod.service || true
 '@ -replace "`r", "")
 
-ssh -i $keyPath -o StrictHostKeyChecking=accept-new azureuser@$linuxIp "$verifyScript"
+ssh -i $keyPath `
+  -o StrictHostKeyChecking=yes `
+  -o "UserKnownHostsFile=$knownHostsPath" `
+  -o GlobalKnownHostsFile=/dev/null `
+  azureuser@$linuxIp "$verifyScript"
+Remove-Item $knownHostsPath
 ```
 
 預期：cloud-init 為 `done`、Java 為 OpenJDK 21、兩個目錄由 `simpleweb` 擁有、兩個
 services 為 `enabled`。在第一個 jar 部署前，services 顯示 `inactive` 是正常狀態。此驗證
-只使用本機已存在的 private key 檔案，指令與輸出都不得包含金鑰內容。
+只使用本機已存在的 private key 檔案與已釘選的 host key，指令與輸出都不得包含金鑰內容。
 
 ## Notes and known limitations
 

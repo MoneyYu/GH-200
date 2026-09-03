@@ -177,15 +177,17 @@ admin user 為 `azureuser`，只用 SSH public key 認證（`linux_ssh_public_ke
 命令列 history。
 
 > [!CAUTION]
-> Repo 的一般規則禁止 agent 執行 `terraform apply`；本次使用者在核准客製化計畫時，
-> **明確授權 agent 只對 `GH200-0903` 執行一次 reviewed apply**。該 apply 已完成：
-> `18 added, 0 changed, 0 destroyed`（此為 SSH-only 重構**之前**的原始 stack）。
-> SSH-only 重構（移除 Windows VM/Web App、改用 `linux_ssh_public_key`、加入
-> `AllowSshFromAzureCloud`、runner 預先安裝 extension）之後另外經過使用者核准可執行
-> **一次** reviewed apply，但**目前只跑過 `plan`，尚未實際 apply**；不得宣稱這次重構
-> 已經套用到 Azure，也不得再次執行 apply 或任何 destroy，除非使用者再次明確指示。
-> `terraform destroy` 在課程開始前**絕對不得執行**，也不得以 display name、prefix
-> 或 wildcard 對共享 subscription 清理。
+> Repo 的一般規則禁止 agent 執行 `terraform apply`。`GH200-0903` 在 SSH-only 重構存在之前，
+> 已有一次不同、**已完成**的歷史 apply：`18 added, 0 changed, 0 destroyed`，建立含 Windows
+> VM/Web App 的舊有 stack；這是已發生的歷史事實，與下方針對 SSH-only 重構的授權是不同事件。
+>
+> **針對 SSH-only 重構本身**（移除 Windows VM/Web App、改用 `linux_ssh_public_key`、加入
+> `AllowSshFromAzureCloud`、runner 預先安裝 extension），使用者授權對 `GH200-0903` 執行
+> **恰好一次** reviewed apply，且僅限於已審閱的 plan 與 implementation gate 通過之後。
+> 截至目前只跑過 `plan`，**尚未實際 apply，不得宣稱這次重構已經套用到 Azure**。**未經
+> 使用者新的明確授權，不得再次執行 apply**。`terraform destroy` **必須有使用者新的明確
+> 要求並經確認**才可執行；課程開始前絕對不得執行，也不得以 display name、prefix 或
+> wildcard 對共享 subscription 清理。
 
 Terraform 的閱讀、`fmt`、`init`、`validate`、`plan` 仍應依 [`../TERRAFORM/README.md`](../TERRAFORM/README.md) 與既有 repo 規則由適當人員處理。本文不修改或重新定義 Terraform 設定。
 

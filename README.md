@@ -51,8 +51,10 @@ then verify the deployed commit SHA — and promote a verified test build to pro
 `demo-java-01` through `06` are the main Build → Test → Package → Deploy path to the
 on-premises VM simulation, over SSH. `demo-java-07` is a contrast that deploys the same Java app
 to a Linux App Service through Azure OIDC — a PaaS/OIDC comparison, not a VM deployment path.
-`demo-java-08` requires registering an ephemeral runner with the `gh200` label; it otherwise stays
-queued by design. The `confirm_production=deploy` input prevents accidental deployment but does
+`demo-java-08` runs on the same VM as the SSH deploy target, as a classroom simplification; this
+path itself needs no inbound SSH access. It requires registering an ephemeral runner with the
+`gh200` label; it otherwise stays queued by design. The `confirm_production=deploy` input
+prevents accidental deployment but does
 **not** provide separation of duties; use the MoneyDemo class repo for the real reviewer gate.
 
 ## Infos
@@ -73,7 +75,7 @@ Open the [student lab index](https://github.com/MoneyDemo/20260903-GH200/blob/ma
 and complete `lab01-first-workflow.md` through `lab06-troubleshooting.md`;
 `lab07-selfhosted-runner.md` is optional.
 
-Follow the progressive workflows in `.github/workflows`: `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`. Use `07.deploy-webapp`, `08.selfhosted-runner`, and `09.troubleshooting` as instructor-led contrasts and troubleshooting material.
+Follow the progressive workflows in the class repository's own `.github/workflows`: `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`. Use `07.deploy-ssh`, `08.selfhosted-runner`, and `09.troubleshooting` as instructor-led contrasts and troubleshooting material.
 
 ## Course Info
 ![Course overview](https://mdcontent.yu.money/contents/f008fce23003844339a3ac100.zh-TW.png)

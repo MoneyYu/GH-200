@@ -112,14 +112,22 @@ behavioral — this is not a place for narrative history.
   rule but is destructive, so run it only after an explicit user request and confirmation; course
   cleanup is normally trainer-run. Because `apply` is forbidden, never claim an end-to-end
   apply/destroy validation was performed.
-- The user explicitly authorized one reviewed, one-off apply of `GH200-0903` for this delivery.
-  It completed with 18 added / 0 changed / 0 destroyed. **Do not run apply again and do not run
-  destroy before the class.**
-- The user separately authorized **one reviewed Terraform apply for the SSH-only refactor**
-  (Windows VM/Web App removal, Linux Web App conversion, `linux_ssh_public_key` variable,
-  `AllowSshFromAzureCloud` NSG rule, runner-preinstall extension) after reviewing its plan. Only
-  `plan` has been run for that refactor so far — **do not claim it has been applied, and do not
-  run that apply, any further apply, or any destroy without a new explicit user instruction.**
+- **Terraform apply/destroy policy for `GH200-0903` (single source of truth — do not restate
+  this differently in `docs/demo-environment.md` or `TERRAFORM/README.md`).** A historical apply
+  ran *before* the SSH-only refactor existed and created the pre-refactor topology (Windows VM,
+  Windows Web App, and the original Linux VM): 18 added / 0 changed / 0 destroyed. That is a
+  separate, already-completed event, now superseded by the SSH-only refactor design below — it is
+  not the apply this policy authorizes.
+  For the **SSH-only refactor** itself (Windows VM/Web App removal, Linux Web App conversion,
+  `linux_ssh_public_key` variable, `AllowSshFromAzureCloud` NSG rule, runner-preinstall
+  extension), the user authorized **exactly one** reviewed Terraform apply, to run only after its
+  plan has been reviewed and the implementation gate has passed. Only `plan` has been run so far
+  for that refactor — **do not claim this apply has happened.** Do not run this apply, any
+  further apply, or any destroy **without a new, explicit user authorization**; destroy
+  additionally always requires a new explicit user request **and confirmation** before it may
+  run. Do not write generic "trainer may run apply/destroy whenever" instructions anywhere in
+  this repo — every apply or destroy invitation must carry this authorization/confirmation
+  gating.
 - Preserve the existing unmanaged backend storage: never delete the `tfstate` container or the
   now-orphaned `deployments` Blob container (leftover from the pre-SSH artifact-transport design)
   without a new explicit user instruction; they are out of Terraform's management scope.
