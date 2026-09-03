@@ -14,16 +14,19 @@
 
 | 項目 | 場次設定／用途 |
 |---|---|
-| OS | Azure Ubuntu 24.04 Linux VM |
+| OS | Azure Ubuntu 24.04 Linux VM，模擬 on-prem application server |
 | 測試服務 | systemd `simpleweb-test`，port `8080` |
 | 正式服務 | systemd `simpleweb-prod`，port `8081` |
 | GitHub Environments | `test` 與 `production` |
 | Production 保護 | `production` 有 required-reviewer approval gate；這是預期等待狀態，不是 workflow failure。 |
-| 主要部署方式 | `az vm run-command` + Azure OIDC |
-| 對照方式 | SSH：需要開放連接埠與儲存 private key；只作安全代價比較。 |
-| M4 對照 | self-hosted runner 安裝於該 VM；只在受信任 workflow 執行。 |
+| 主要部署方式（04-06） | SSH：Build → Test → Package → SCP → SSH → `systemctl` → 語意化 `/api/info` SHA smoke test；需要開放 inbound TCP/22 並在 GitHub 保存長期 private key，主機指紋釘選在 `VM_SSH_HOST_KEY`。 |
+| 對照方式（07） | Linux App Service + Azure OIDC：短期 token、無需開放連接埠或保存長期 Azure 密碼，是 PaaS/OIDC 對照，不是 VM 部署路徑。 |
+| M4 對照（08） | self-hosted runner 與 SSH 部署目標同一台 VM，屬課堂簡化；這條路徑本身不需要 inbound SSH，只在受信任 workflow 執行，且不可讓不信任 fork PR 使用。 |
 
-Progressive workflow 是 `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`。`07.deploy-ssh`、`08.selfhosted-runner`、`09.troubleshooting` 是對照／診斷材料，而不是主線的替代方案。
+Progressive workflow 是 `01.build` → `02.build-test` → `03.package-artifact` →
+`04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`。`07.deploy-webapp`、
+`08.selfhosted-runner`、`09.troubleshooting` 是對照／診斷材料，而不是主線的替代方案：
+`07` 是 Azure OIDC/PaaS 對照，`08` 是同一台 VM 上的 self-hosted runner 對照。
 
 ### 2026-09-03 班級 repo 已部署環境
 
@@ -40,29 +43,49 @@ Progressive workflow 是 `01.build` → `02.build-test` → `03.package-artifact
 | Ephemeral self-hosted runner | [Run 33660507745](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33660507745)；完成後 runner 自動解除 |
 | Troubleshooting failure | [Run 33660678534](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33660678534) — 故意失敗的教材 |
 
-以上 run 都來自 public class repo `MoneyDemo/20260903-GH200`，用來示範真正的
-required-reviewer approval gate。
+以上 run 都來自 public class repo `MoneyDemo/20260903-GH200`，記錄該次交付當時已完成的
+歷史 run；它與下方 `MoneyYu/GH-200` self-contained workflows 目前採用的 SSH-only
+機制是兩套獨立設定，不代表 `MoneyYu/GH-200` 現在也使用 Run Command 或 digest transport。
 
 ### MoneyYu/GH-200 self-contained workflows
 
-GH-200 自己是 private repo，因此 `demo-java-04/05/06` 不使用匿名 GitHub Release。
-流程改為：
+GH-200 自己是 private repo，因此 `demo-java-04`/`05`/`06` 不使用匿名 GitHub Release，
+也**不再**使用 Azure Run Command、Blob artifact transport 或 VM managed-identity/IMDS
+下載。目前作法改為 **SSH-only**：
 
-1. Workflow 以 Azure OIDC 登入。
-2. 將每個 commit 的 jar、`build-sha.txt`、SHA-256 digest 上傳到 private Blob path
-   `deployments/builds/<commit-sha>/`。
-3. Linux VM 以 system-assigned managed identity 取得 Storage token、下載並驗證 digest。
-4. Run Command 回傳 `DEPLOY_OK`，外部 smoke test 再比對 `/api/info` build SHA。
+1. GitHub-hosted runner 建置、測試並打包 jar 為 `actions/upload-artifact` workflow
+   artifact（不上傳到 Azure）。
+2. `demo-java-04-deploy-test` 用 repository secret `VM_SSH_PRIVATE_KEY` 建立僅本次 run
+   使用的 SSH 身分，並以 repository variable `VM_SSH_HOST_KEY`（完整 OpenSSH
+   `known_hosts` 格式，不是 `SHA256:` 指紋）做 `StrictHostKeyChecking=yes` 的主機指紋
+   釘選；**不使用** `ssh-keyscan` 或任何 per-run TOFU（trust-on-first-use）。
+3. `scp` 把 jar 複製到 VM，再用 SSH 執行 `sudo install` 與
+   `systemctl restart simpleweb-test`／`simpleweb-prod`，最後對 `/api/info` 做語意化
+   smoke test，比對 build SHA 而不是只看 HTTP 200。
+4. `demo-java-05-deploy-prod` 不重新 build，而是下載 `04` 針對同一 commit SHA 成功的
+   artifact，經 `confirm=deploy` 與完整 40 字元 SHA 的人工輸入確認後 promote 到
+   production；`demo-java-06-full-pipeline` 則是 build once、把同一份 artifact 串接部署
+   到 test 與 production 的完整流程 demo。
 
-目前已配置：
+目前已配置的 GitHub 設定：
 
-| 項目 | 值／權限 |
+| 項目 | 值／用途 |
 |---|---|
-| Storage account | `gh200state0903ksh`（shared key disabled） |
-| Container | `deployments` |
-| GitHub variable | `AZURE_STORAGE_ACCOUNT=gh200state0903ksh` |
-| OIDC service principal | Container scope `Storage Blob Data Contributor` |
-| Linux VM managed identity | Container scope `Storage Blob Data Reader` |
+| Repository secret | `VM_SSH_PRIVATE_KEY`（deploy 用 SSH private key；`04`/`05`/`06` 都會用到，因此設在
+  repository 層級，或需要在 `test` 與 `production` 兩個 Environment 各設一份） |
+| Repository variable | `VM_PUBLIC_IP` |
+| Repository variable | `VM_SSH_USER=azureuser` |
+| Repository variable | `VM_SSH_HOST_KEY`（完整 OpenSSH `known_hosts` 行；於受信任網路下設定/擷取，VM host key
+  輪替後須手動更新，不可用 `SHA256:` 指紋代替） |
+
+這個作法的代價是需要對 VM 開放 inbound TCP/22，並在 GitHub 保存一把長期存在的 private
+key；`demo-java-07-deploy-webapp` 走 Azure OIDC 部署到 Linux App Service，不需要開放
+連接埠或保存長期 Azure 密碼，可用來對照兩種部署方式的風險與維運差異，但它是 PaaS/OIDC
+對照，不是取代 VM 的部署路徑。
+
+Storage account `gh200state0903ksh` 之前的 `deployments` container（Blob artifact
+transport 遺留資源）目前**不受 Terraform 管理，也未刪除**；本文與 Terraform 都不指示
+清除它，如需處理由講師/使用者另行決定。
 
 MoneyYu organization 的方案不支援 Environment required reviewers（API 回傳 HTTP 422）。
 因此 GH-200 的 `demo-java-06-full-pipeline` 只允許手動觸發，且要求
@@ -73,7 +96,7 @@ MoneyYu organization 的方案不支援 Environment required reviewers（API 回
 
 OIDC 建立 GitHub Actions 與 **Azure** 的 workload identity federation；它不取代用於 GitHub API 的 `GITHUB_TOKEN`。講師在 Azure 端為 class repo 的實際觸發條件建立 federated credential，subject 必須精準限制於使用的 repository、branch 或 GitHub Environment；workflow job 必須宣告最小必要的 `permissions:`，包括 `id-token: write`。
 
-- 設定順序：先準備具有最小 Azure RBAC 的 Azure workload identity，再建立 GitHub OIDC federated credential，接著在對應 GitHub Environment 設定 workflow 所需的非敏感識別值／secret，最後以實際 workflow 觸發條件測試 `azure/login` 與 `az vm run-command`。
+- 設定順序：先準備具有最小 Azure RBAC 的 Azure workload identity，再建立 GitHub OIDC federated credential，接著在對應 GitHub Environment 設定 workflow 所需的非敏感識別值／secret，最後以實際 workflow 觸發條件測試 `azure/login` 與其後的 Azure 動作（class repo 為 `az vm run-command`；`MoneyYu/GH-200` 的 `demo-java-07-deploy-webapp` 為 Azure Linux App Service 部署，`04`-`06` 完全不使用 OIDC，改用 SSH）。
 - 建立 credential 時，以 class repo 和 `test`／`production` 的實際部署條件為準；不要複製另一個 repo、branch 或 environment 的 subject。
 - 不把 Azure client secret 寫入 workflow 或交給學員。
 - Azure RBAC 只授與部署所需的最小權限。
@@ -82,9 +105,12 @@ OIDC 建立 GitHub Actions 與 **Azure** 的 workload identity federation；它�
 - 本場 GitHub OIDC assertion 使用含 organization/repository **stable ID** 的 subject
   格式。若出現 `AADSTS700213`，以 workflow log 顯示的 presented assertion subject
   為準更新 federated credential，不要假設傳統的純 `owner/repo` 格式。
-- 共享 subscription 可能由外部排程 deallocate VM；deployment workflows 已在
-  Run Command 前執行 `az vm start`。若看到 `OperationNotAllowed` 要先查 power state，
-  不要重跑 Terraform。
+- 共享 subscription 可能由外部排程 deallocate VM。使用 Run Command 的 class repo
+  workflows 已在 Run Command 前執行 `az vm start`；`MoneyYu/GH-200` 的 SSH-only
+  `04`/`05`/`06` **沒有** Azure CLI 登入步驟，也不會自動啟動 VM——VM 電源狀態或
+  TCP/22 未就緒時，SSH 連線步驟會快速失敗並提示「請確認 VM 已啟動」。**必須由講師
+  在課前用 Azure CLI 啟動該 VM**，workflow 本身不會、也不應該負責開機。若看到
+  `OperationNotAllowed` 要先查 power state，不要重跑 Terraform。
 
 官方參考：
 
@@ -99,7 +125,7 @@ OIDC 建立 GitHub Actions 與 **Azure** 的 workload identity federation；它�
 | **M2 — Consume and Troubleshoot Workflows** | Actions tab、workflow logs、`09.troubleshooting`、指定 workflow templates | 讀 execution / log / debug，完成 failure diagnosis。 |
 | **M3 — Author and Maintain Actions（本次不授課）** | N/A | 不配置環境、不示範、不安排 lab。 |
 | **M4 — Manage GitHub Actions in the Enterprise** | organization policies、runner groups、secrets/variables governance、Ubuntu VM self-hosted runner | 說明治理與 runner 信任邊界；可展示 `08.selfhosted-runner`。 |
-| **M5 — Secure and Optimize Automation** | Azure OIDC、`test`/`production` Environments、Ubuntu VM services、`az vm run-command` | `04.deploy-test`、`05.deploy-prod`、`06.full-pipeline`；production 必經 approval。 |
+| **M5 — Secure and Optimize Automation** | SSH-only VM 部署（`04`-`06`）＋ Azure OIDC 的 `07.deploy-webapp` 對照、`test`/`production` Environments、Ubuntu VM services | `04.deploy-test`、`05.deploy-prod`、`06.full-pipeline`；production 必經 approval。 |
 
 ## GitHub prerequisites
 
@@ -110,48 +136,60 @@ OIDC 建立 GitHub Actions 與 **Azure** 的 workload identity federation；它�
 - [ ] `test` / `production` Environments 存在；production required reviewer 可由正確人員核准。
 - [ ] Environment secrets 和 variables 已依 workflow 名稱建立，且未出現在 YAML、log、投影片或 shell history。
 - [ ] `01.build`…`06.full-pipeline` 至少有一組可展示的 run；`09.troubleshooting` 有可讀的失敗案例。
-- [ ] 若示範 VM self-hosted runner，runner 已在 GitHub UI 顯示可用，registration token 僅在註冊當下取得。
+- [ ] 若示範 VM self-hosted runner，runner 已在 GitHub UI 顯示可用，registration token 僅在註冊當下取得；registration 需要講師以受信任的手動連線／session 完成，且 runner 應用程式須每 30 天內更新一次，否則 GitHub 不會再派工作給它。
+- [ ] 課前用 Azure CLI 確認並啟動（若已 deallocate）SSH 部署目標 VM；`04`/`05`/`06` 的 workflow 完全不含 Azure 登入，也不會自行啟動 VM，VM 未開機或 TCP/22 未開放時 SSH 連線步驟會快速失敗。
+- [ ] `VM_SSH_PRIVATE_KEY`（secret）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、`VM_SSH_HOST_KEY`（variables）已設定；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts` 行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入，VM host key 輪替後需手動更新。
 
 Self-hosted runner 不得接收不信任 fork pull request。它保留機器狀態，維護、修補、清理與安全隔離均由講師／管理者負責；runner group 應限縮可使用的 repository。
 
-## Windows VM and Windows Web App (C# demos)
+## Java Web App and Windows fallback
 
-`TERRAFORM/` 的既有 Windows VM 和 Windows Web App 仍保留給 **C# demos**。它們不是本場 Java 主線的部署目標，也不取代 Ubuntu VM 上的 `simpleweb-test` / `simpleweb-prod`。
-
-既有 stack 的角色：
+`TERRAFORM/` 現行設定**沒有 Windows VM 或 Windows Web App**；SSH-only 重構已把它們從
+`MOD.tf` 移除。既有 stack 只剩兩個 Azure 部署 target：
 
 | 資源 | 用途 |
 |---|---|
-| Windows Server VM + IIS | C# demo 或 Windows self-hosted runner 對照主機。 |
-| Windows Web App（.NET 8） | C# `azure/webapps-deploy` demo target。 |
-| Ubuntu 24.04 VM | 本場 Java app 的 test/prod systemd services 與 Linux runner 對照。 |
+| Ubuntu 24.04 VM | 本場 Java app 的 test/prod systemd services，也是 `04`-`06` 的 SSH 部署 target 與 `08` 的 same-VM self-hosted runner 對照主機。 |
+| Linux App Service（Java SE 21 Web App） | `07.deploy-webapp` 的 Azure OIDC／PaaS 對照 target，與 SSH VM 路徑並非互相替代。 |
 
-### Existing Terraform fallback inventory
+若未來需要獨立的 C# demo，須另行規劃基礎設施；目前 `TERRAFORM/` 不包含任何 C# 或
+Windows 目標。
 
-下列是既有 `TERRAFORM/` 的 Windows/C# fallback 意圖，保留供講師辨識資源；詳細操作以 [`../TERRAFORM/README.md`](../TERRAFORM/README.md) 為準。
+### Current Terraform inventory
 
-| Azure 資源 | 名稱模式（`local.resource_suffix` = `<group_postfix>-ksh`） | C# demo 用途 |
+下列對照現行 `TERRAFORM/MOD.tf` 的實際資源，詳細操作以
+[`../TERRAFORM/README.md`](../TERRAFORM/README.md) 為準。
+
+| Azure 資源 | 名稱模式（`local.resource_suffix` = `<group_postfix>-ksh`） | 用途 |
 |---|---|---|
-| Resource group | `GH200-<group_postfix>` | Windows/C# fallback stack 容器。 |
-| Virtual network / subnet | `lab-vnet-<group_postfix>-ksh` / `default` | Windows VM 網路。 |
-| Public IP、NIC | `lab-pip-<group_postfix>-ksh`、`lab-nic-<group_postfix>-ksh` | VM 的既有網路元件。 |
-| Windows Server 2022 VM | `lab-vm-<group_postfix>-ksh` | C# demo 或 Windows runner 對照主機；runner 不由 Terraform 安裝或註冊。 |
-| `AADLoginForWindows` / IIS script extension | `lab-aad-<group_postfix>-ksh`、`lab-script-<group_postfix>-ksh` | Microsoft Entra ID 登入與 IIS baseline。 |
-| Windows App Service plan（`S1`） | `lab-app-plan-<group_postfix>-ksh` | Windows Web App plan。 |
-| Windows Web App（.NET 8） | `gh200-web-<group_postfix>-ksh` | C# `azure/webapps-deploy` target。 |
+| Resource group | `GH200-<group_postfix>` | Stack 容器。 |
+| Virtual network / subnet | `lab-vnet-<group_postfix>-ksh` / `lab-linux-subnet-<group_postfix>-ksh` | Linux VM 網路。 |
+| Public IP、NIC | `lab-linux-pip-<group_postfix>-ksh`、`lab-linux-nic-<group_postfix>-ksh` | Linux VM 的網路元件。 |
+| Network Security Group | `lab-linux-nsg-<group_postfix>-ksh` | `8080`/`8081` 對外開放；`22` 只允許來源 `AzureCloud`（`AllowSshFromAzureCloud`）。 |
+| Ubuntu 24.04 VM | `lab-linux-<group_postfix>-ksh` | `04`-`06` SSH 部署 target；`08` self-hosted runner 對照主機。 |
+| Linux Custom Script extension | `lab-linux-runner-<group_postfix>-ksh` | 預先下載/解壓縮 runner binary，不含 registration token。 |
+| Linux App Service plan（`S1`） | `lab-app-plan-<group_postfix>-ksh` | Linux Java Web App plan。 |
+| Linux Java Web App（Java SE 21） | `gh200-web-<group_postfix>-ksh` | `07.deploy-webapp` 的 Azure OIDC/PaaS 對照 target。 |
 
-既有 stack 的 region 為 `japaneast`。`group_postfix` 為 1–10 個小寫英數字；`user_name` 預設為 `demouser`，`user_password` 是 sensitive 且僅能在講師安全輸入時提供。不得將 password 寫入 `.tf`、`.tfvars`、chat、投影片或命令列 history。
+既有 stack 的 region 為 `japaneast`。`group_postfix` 為 1–10 個小寫英數字；Linux VM 的
+admin user 為 `azureuser`，只用 SSH public key 認證（`linux_ssh_public_key` 變數），
+沒有任何 password 變數。不得將 SSH private key 寫入 `.tf`、`.tfvars`、chat、投影片或
+命令列 history。
 
 > [!CAUTION]
 > Repo 的一般規則禁止 agent 執行 `terraform apply`；本次使用者在核准客製化計畫時，
-> **明確授權 agent 只對 `GH200-0903` 執行一次 reviewed plan**。該 apply 已完成：
-> `18 added, 0 changed, 0 destroyed`。授權不包含再次 apply，也不包含 destroy。
+> **明確授權 agent 只對 `GH200-0903` 執行一次 reviewed apply**。該 apply 已完成：
+> `18 added, 0 changed, 0 destroyed`（此為 SSH-only 重構**之前**的原始 stack）。
+> SSH-only 重構（移除 Windows VM/Web App、改用 `linux_ssh_public_key`、加入
+> `AllowSshFromAzureCloud`、runner 預先安裝 extension）之後另外經過使用者核准可執行
+> **一次** reviewed apply，但**目前只跑過 `plan`，尚未實際 apply**；不得宣稱這次重構
+> 已經套用到 Azure，也不得再次執行 apply 或任何 destroy，除非使用者再次明確指示。
 > `terraform destroy` 在課程開始前**絕對不得執行**，也不得以 display name、prefix
 > 或 wildcard 對共享 subscription 清理。
 
 Terraform 的閱讀、`fmt`、`init`、`validate`、`plan` 仍應依 [`../TERRAFORM/README.md`](../TERRAFORM/README.md) 與既有 repo 規則由適當人員處理。本文不修改或重新定義 Terraform 設定。
 
-Terraform 不會建立 GitHub repository、workflow、Environment、secret、package 或 runner；它也不會替講師建立 Microsoft Entra ID VM login role assignment。若使用 Windows VM，講師仍須依實際需要安排 `Virtual Machine Administrator Login` 或 `Virtual Machine User Login`，並以精確識別的資源處理任何課後清理。
+Terraform 不會建立 GitHub repository、workflow、Environment、secret、package 或 runner；它也不會替講師註冊 self-hosted runner 或處理 GitHub secrets/variables。
 
 ## Pre-class smoke test
 
@@ -168,18 +206,25 @@ Terraform 不會建立 GitHub repository、workflow、Environment、secret、pac
 
 ### Identity and VM
 
-- [x] Azure OIDC federated credential、`Virtual Machine Contributor` RBAC、
-  `permissions: id-token: write` 與 `az vm run-command` 已用 class repo 實際測通。
-- [x] Ubuntu VM 可用 Azure Run Command 管理；SSH 對照曾實測成功。共享 policy
-  會移除 persistent port 22 rule，現場 SSH demo 前須依 `TERRAFORM/README.md` 建立
-  `AllowSshForDemo`，完成後立即刪除。
+- [x] Azure OIDC federated credential、least-privilege Azure RBAC、
+  `permissions: id-token: write` 已用 class repo 實際測通（class repo 走
+  `az vm run-command`；`MoneyYu/GH-200` 的 `07.deploy-webapp` 走 Linux App Service，
+  兩者都不涉及 VM 的 SSH 部署）。
+- [ ] **尚待課前驗證**：`MoneyYu/GH-200` 的 SSH-only `04`/`05`/`06`
+  尚未有 live workflow dispatch 證據；目前只完成程式碼與 Terraform 的靜態驗證
+  （lint／`bash -n`／`terraform validate`／`plan`），未實際觸發 workflow 或執行
+  `terraform apply`。課前須實際 dispatch 一次，確認 `VM_SSH_PRIVATE_KEY` +
+  `VM_SSH_HOST_KEY` 主機指紋釘選、SCP、`systemctl restart` 與 `/api/info` SHA smoke
+  test 全部成功，且持久的 `AllowSshFromAzureCloud`（來源 `AzureCloud`，非
+  `Internet`）規則確實可讓 GitHub-hosted runner 連線；不需要、也不應該建立任何
+  臨時 `AllowSshForDemo` 規則。
 - [x] `systemctl` 顯示 `simpleweb-test` 和 `simpleweb-prod` 運作，兩個 health endpoint 為 `UP`。
 - [x] Ephemeral self-hosted runner 已接走一個 trusted workflow，job 完成後 runner count 回到 `0`。
 
-### C# fallback and lifecycle
+### Lifecycle and cleanup
 
-- [ ] Windows VM / Windows Web App 僅於 C# demo 使用，與 Java VM ports 分開說明。
-- [ ] `GH200-0903` stack 已由 trainer/author 的 one-off apply 準備好；**課前不執行 destroy**。
+- [ ] `GH200-0903` stack 的原始 apply（`18 added, 0 changed, 0 destroyed`）已就緒；
+  SSH-only 重構的 Terraform plan 已審閱但**尚未 apply**；**課前不執行 destroy**。
 - [ ] 清理只針對人員確認的精確 resource ID／名稱與本次 runner/package；不做自動或萬用字元清理。
 
 ## Trust boundaries and live-failure handling
@@ -187,11 +232,11 @@ Terraform 不會建立 GitHub repository、workflow、Environment、secret、pac
 | 身分 | 用途 | 禁止事項 |
 |---|---|---|
 | `GITHUB_TOKEN` | repository 內 GitHub API 操作 | 不作 Azure 登入。 |
-| Azure OIDC | Azure deploy 的短期 token | 不用來取代 `GITHUB_TOKEN`。 |
-| SSH private key | 只作 `07.deploy-ssh` 對照 | 不貼入 repo、log 或投影片。 |
+| Azure OIDC | Azure deploy 的短期 token（`07.deploy-webapp`） | 不用來取代 `GITHUB_TOKEN`；`04`-`06` 完全不使用它。 |
+| `VM_SSH_PRIVATE_KEY` | `04`/`05`/`06` 主線 SSH 部署身分 | 不貼入 repo、log 或投影片；每個 job run 結束都清除暫存檔。 |
 | self-hosted runner token | 一次性的 runner 註冊 | 不保存或重用。 |
 
-若 live deploy 失敗，先保留 run，按 workflow → OIDC → run-command → systemd → health endpoint 的順序定位。三分鐘後切至成功 run／health screenshot；不臨時改 Terraform、不開放額外網路連接埠、不關掉 approval gate，也不將 secret 當作除錯輸出。
+若 live deploy 失敗，先保留 run，按 workflow → SSH 連線 → SCP → systemd → health endpoint 的順序定位（`07.deploy-webapp` 則是 workflow → OIDC → Web App deploy → health endpoint）。三分鐘後切至成功 run／health screenshot；不臨時改 Terraform、不開放額外網路連接埠、不關掉 approval gate，也不將 secret 當作除錯輸出。
 
 ## References
 

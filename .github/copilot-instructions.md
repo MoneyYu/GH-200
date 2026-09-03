@@ -35,14 +35,18 @@ behavioral — this is not a place for narrative history.
   forks; CD labs are trainer-run by default because each fork needs its own exact OIDC federated
   credential and RBAC.
 - The deployed Java target is `lab-linux-0903-ksh` in `GH200-0903`: test on port `8080`,
-  production on `8081`. Production uses a GitHub Environment required-reviewer gate. The Linux
-  VM also supports the SSH comparison and an ephemeral self-hosted runner demo.
+  production on `8081`. Production uses a GitHub Environment required-reviewer gate. The same
+  Linux VM is also the SSH-only deployment target for `MoneyYu/GH-200`'s `demo-java-04`-`06` and
+  hosts the same-VM self-hosted runner demo (`08`), as a classroom simplification.
 - The shared Azure subscription enforces policy after deployment: Public IP resources receive a
   `FirstPartyUsage` tag, Windows OS disks use `Standard_LRS`, Web App basic publishing auth stays
-  disabled, and persistent Internet SSH rules are removed. Terraform deliberately matches/ignores
-  those policy-owned values so post-deploy `terraform plan` is clean. For the optional SSH demo,
-  open the exact `AllowSshForDemo` NSG rule immediately before the run and remove it immediately
-  afterwards; never make port 22 persistent.
+  disabled, and persistent Internet-sourced SSH rules are removed. Terraform deliberately
+  matches/ignores those policy-owned values so post-deploy `terraform plan` is clean. The active
+  Java deployment path (`04`-`06`) is SSH-only to the Linux VM and relies on the
+  Terraform-managed `AllowSshFromAzureCloud` rule (source `AzureCloud`, not `Internet`) staying in
+  place; if the shared subscription's policy scan removes it, the trainer/user restores the same
+  `AllowSshFromAzureCloud` rule manually — never broaden it to `Internet` and never add a
+  temporary Internet-facing SSH rule.
 
 ## Labs: there is no lab repo
 
@@ -91,11 +95,18 @@ behavioral — this is not a place for narrative history.
 ## TERRAFORM/
 
 - This stack is the trainer's **backup/fallback** only. In class the trainer builds resources
-  live; this stands them up if that fails. It maps to the course as: **Windows VM → M07
-  self-hosted runner** demo, **App Service Web App → M03** deploy target.
+  live; this stands them up if that fails. There is **no Windows VM** in this stack. It maps to
+  the course as: **Linux VM → M07 self-hosted runner demo** (same VM as the SSH deploy target,
+  a classroom simplification) and **Linux Java Web App → M03 Azure OIDC/PaaS contrast** deploy
+  target.
 - For the 2026-09-03 customer delivery, the stack also contains an Ubuntu 24.04 VM for the Java
   Build → Test → Package → Deploy story. It runs `simpleweb-test` (8080) and `simpleweb-prod`
-  (8081). `cloud-init-java.yaml` installs OpenJDK 21 and creates the systemd units.
+  (8081). `cloud-init-java.yaml` installs OpenJDK 21 and creates the systemd units. The active
+  Java deployment path (`demo-java-04` through `06`) is **SSH-only** — build once, `scp` the jar,
+  `ssh` to run `systemctl restart` — with the Linux VM simulating an on-prem server. It does
+  **not** use Azure Run Command, Blob artifact transport, or VM IMDS/managed-identity download;
+  `demo-java-07-deploy-webapp` is the Azure OIDC/PaaS contrast to the Linux Web App, not a VM
+  deployment path.
 - **`terraform apply` is forbidden for the AI agent** (`.github/instructions/terraform.instructions.md`).
   `fmt`, `init`, `validate`, and `plan` are allowed. `terraform destroy` is permitted by the base
   rule but is destructive, so run it only after an explicit user request and confirmation; course
@@ -104,6 +115,17 @@ behavioral — this is not a place for narrative history.
 - The user explicitly authorized one reviewed, one-off apply of `GH200-0903` for this delivery.
   It completed with 18 added / 0 changed / 0 destroyed. **Do not run apply again and do not run
   destroy before the class.**
+- The user separately authorized **one reviewed Terraform apply for the SSH-only refactor**
+  (Windows VM/Web App removal, Linux Web App conversion, `linux_ssh_public_key` variable,
+  `AllowSshFromAzureCloud` NSG rule, runner-preinstall extension) after reviewing its plan. Only
+  `plan` has been run for that refactor so far — **do not claim it has been applied, and do not
+  run that apply, any further apply, or any destroy without a new explicit user instruction.**
+- Preserve the existing unmanaged backend storage: never delete the `tfstate` container or the
+  now-orphaned `deployments` Blob container (leftover from the pre-SSH artifact-transport design)
+  without a new explicit user instruction; they are out of Terraform's management scope.
+- If the shared subscription's policy scan removes the Terraform-managed `AllowSshFromAzureCloud`
+  rule, the trainer/user restores it manually and has accepted that risk; the AI agent must not
+  silently broaden it to `Internet` or add a substitute rule.
 - `azurerm` must be **`~>4.0` or higher**. Write resources from the official provider docs; do not
   invent arguments. `terraform validate` passing is the proof.
 - File split: `MAIN.tf` = terraform/provider blocks, variables, locals, resource group;
@@ -113,8 +135,10 @@ behavioral — this is not a place for narrative history.
   `local.resource_suffix = "<postfix>-<random_str>"`. Region is
   `local.location = "japaneast"`.
 - Apply `tags = local.default_tags` to every taggable resource.
-- **No credentials in source.** `var.user_password` is `sensitive` and has no default; supply it
-  via `TF_VAR_user_password` or `-var`. `*.tfvars` is git-ignored for this reason.
+- **No credentials in source.** `var.linux_ssh_public_key` is the only VM identity input and takes
+  only a public key; supply it via `TF_VAR_linux_ssh_public_key` or `-var`. SSH private keys are
+  never passed to Terraform and never appear in `.tf`, `.tfvars`, or state. `*.tfvars` stays
+  git-ignored regardless.
 - Active state is stored in the AAD-only Azure backend
   `gh200state0903ksh/tfstate/gh200-0903.tfstate`; shared-key access is disabled. Fresh clones must
   use the backend configuration documented in `TERRAFORM/README.md`. Never download or commit

@@ -82,14 +82,14 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 
 | 項目 | 課堂呈現 |
 |---|---|
-| Azure Ubuntu 24.04 Linux VM | 同一台 VM 承載兩個 systemd services：`simpleweb-test` 在 `8080`，`simpleweb-prod` 在 `8081`。 |
+| Azure Ubuntu 24.04 Linux VM | 同一台 VM 承載兩個 systemd services：`simpleweb-test` 在 `8080`，`simpleweb-prod` 在 `8081`；VM 同時模擬 on-prem application server。 |
 | GitHub Environments | `test` 與 `production`；`production` 有 required-reviewer approval gate。 |
-| 主線部署 | `az vm run-command` + Azure OIDC（M5）。強調短期 token、`permissions: id-token: write` 與精準 federated credential。 |
-| SSH 對照 | `07.deploy-ssh`：說明需要開放連接埠與儲存 private key，因此不是主線。 |
-| Self-hosted runner 對照 | `08.selfhosted-runner`（M4）：runner 在 VM 上，適合說明網路可達性、runner group、殘留狀態與不信任 PR 的風險。 |
+| 主線部署（04-06） | SSH-only：Build → Test → Package → SCP → SSH → `systemctl` → 語意化 `/api/info` SHA smoke test（M5）。強調需要開放 inbound TCP/22 並在 GitHub 保存長期 private key，主機指紋釘選在 `VM_SSH_HOST_KEY`，不使用動態 `ssh-keyscan`。 |
+| OIDC/PaaS 對照 | `07.deploy-webapp`：Azure OIDC 部署到 Linux App Service，強調短期 token、`permissions: id-token: write` 與精準 federated credential，不需要開放連接埠或保存長期 private key，因此不是主線的 VM 部署路徑。 |
+| Self-hosted runner 對照 | `08.selfhosted-runner`（M4）：runner 與 SSH 部署目標同一台 VM，是課堂簡化；適合說明網路可達性、runner group、殘留狀態與不信任 PR 的風險，這條路徑本身不需要 inbound SSH。 |
 | 漸進 workflow | `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`；`09.troubleshooting` 用於讀 log。 |
 
-**live deploy 中途失敗：** 先判斷是 YAML/workflow、OIDC、VM command、systemd service 或應用程式 health 的哪一層；用失敗 run 的 job/step/log 示範診斷。三分鐘內未能定位時，切至已完成 run 與兩個健康端點的備援畫面，保留錯誤 run 作為 M2 討論素材。不要改用 SSH、關閉 production gate、印出 secret 或在課堂上修 Terraform。
+**live deploy 中途失敗：** 先判斷是 YAML/workflow、SSH 連線、SCP、systemd service 或應用程式 health 的哪一層（`07.deploy-webapp` 則是 YAML/workflow、OIDC、Web App deploy 或 health）；用失敗 run 的 job/step/log 示範診斷。三分鐘內未能定位時，切至已完成 run 與兩個健康端點的備援畫面，保留錯誤 run 作為 M2 討論素材。不要關閉 production gate、印出 secret 或在課堂上修 Terraform。
 
 ## 逐模組備課指南
 
@@ -209,31 +209,33 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 
 #### 學習目標
 
-- 能用 least-privilege `permissions:`、Azure OIDC 與 GitHub Environments 設計安全部署。
+- 能說明 SSH 部署（長期 private key、主機指紋釘選）與 Azure OIDC（短期 token、federated credential）兩種身分模型的風險與取捨。
 - 能完成 test/prod 的 artifact deploy，並辨識 workflow 效能與成本的基本取捨。
 
 #### 講解重點
 
-- `GITHUB_TOKEN` 不等於 Azure identity；OIDC 以 Azure 為 Connect 對象，job 需 `id-token: write`。
-- federated credential subject 必須精準對應 repo、branch 或 environment；production 用 required reviewer，不繞過 gate。
+- `04`-`06` 走 SSH-only：GitHub secret `VM_SSH_PRIVATE_KEY` 是長期存在的身分，`VM_SSH_HOST_KEY` 做主機指紋釘選（`StrictHostKeyChecking=yes`），不使用 `ssh-keyscan` 之類的 per-run TOFU；這是需要開放 inbound TCP/22 的代價。
+- `07.deploy-webapp` 走 Azure OIDC：`GITHUB_TOKEN` 不等於 Azure identity，OIDC 以 Azure 為 Connect 對象換取短期 token，job 需 `id-token: write`，federated credential subject 必須精準對應 repo、branch 或 environment；不需要開放連接埠或保存長期密碼，是與 SSH 相對的 PaaS/OIDC 對照。
+- production 用 required reviewer（或本 repo 的 `confirm=deploy` 明確輸入），不繞過 gate。
 - 建置一次、以同一 artifact 部署 test/prod；控制 concurrency、避免不必要 runner 分鐘與重複 build。
 - 對第三方 action 用完整 SHA，防止 script injection；secrets 不可 echo 或放 artifact。
 
 #### Demo・Lab
 
-- `04.deploy-test` 部署 `simpleweb-test:8080`；`05.deploy-prod` 等待 production approval 後部署 `simpleweb-prod:8081`；`06.full-pipeline` 串起流程。
-- `lab04`/`lab05` 寫 YAML；`07.deploy-ssh` 只作 SSH 安全代價的對照。
+- `04.deploy-test` 部署 `simpleweb-test:8080`；`05.deploy-prod` 等待人工確認後部署 `simpleweb-prod:8081`；`06.full-pipeline` 串起流程，三者都走 SSH。
+- `lab04`/`lab05` 寫 YAML；`07.deploy-webapp` 展示 Azure OIDC + Linux App Service 的 PaaS/OIDC 對照。
 
 #### 常見問題・坑
 
-- OIDC 失敗先檢查 `id-token: write` 與 federated credential subject；不要把 client secret 作為第一反應。
-- 本場第一次登入曾出現 `AADSTS700213`：GitHub token 的 subject 使用含
+- SSH 連線失敗先檢查 VM 是否開機、TCP/22 是否可達，以及 `VM_SSH_HOST_KEY` 是否為完整 OpenSSH `known_hosts` 行（不是 `SHA256:` 指紋）；VM host key 輪替後要記得手動更新這個 variable。
+- OIDC（`07`）失敗先檢查 `id-token: write` 與 federated credential subject；不要把 client secret 作為第一反應。
+- 本場第一次 OIDC 登入曾出現 `AADSTS700213`：GitHub token 的 subject 使用含
   organization/repository stable ID 的格式，而非只含名稱的舊格式。**直接從 workflow
   error 讀取 presented assertion subject，再讓 Azure federated credential 精確匹配**；
   不要從記憶猜 subject。
-- 共享課程 subscription 可能由外部排程 deallocate VM。每個 Run Command deployment
-  在 `azure/login` 後先執行 `az vm start`，再 invoke；看到
-  `OperationNotAllowed: The operation requires the VM to be running` 時不要重建資源。
+- 共享課程 subscription 可能由外部排程 deallocate VM；`04`-`06` 的 workflow 完全不含
+  Azure CLI 登入，也不會自動開機。**課前務必由講師用 Azure CLI 確認並啟動 VM**，
+  否則 SSH 連線步驟會直接失敗。
 - run 成功但 health endpoint 失敗時，分開檢查 systemd service、port 與 app health。
 
 #### 重要連結
@@ -261,13 +263,17 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 
 ### Java + Azure VM
 
-- [x] Azure Ubuntu 24.04 VM 可由 Azure Run Command 管理。SSH 對照已驗證，但共享
-  policy 會移除 port 22；若現場要重跑 `07.deploy-ssh`，依 `TERRAFORM/README.md`
-  使用精確命名的暫時 rule，demo 後立即刪除。
+- [ ] SSH 部署目標 VM 已由講師用 Azure CLI 確認開機（若曾 deallocate 需先 `az vm start`）；
+  `04`-`06` 的 workflow 完全不含 Azure 登入，也不會自行開機，VM 未就緒時 SSH 連線步驟
+  會快速失敗。持久的 `AllowSshFromAzureCloud`（來源 `AzureCloud`）NSG 規則須確認仍在，
+  若被共享 policy 移除，由講師手動還原，不擴大為 `Internet` 來源、也不建立臨時規則。
 - [ ] `simpleweb-test`（`8080`）與 `simpleweb-prod`（`8081`）systemd services 均 healthy；`/`、`/api/info`、`/actuator/health` 可回應。
-- [ ] Azure OIDC federated credential、最小 Azure RBAC 與 workflow `permissions: id-token: write` 的組合已實跑；確認 subject 對應 class repo 與 Environment。
-- [ ] `az vm run-command` 主線、SSH 對照、self-hosted runner 對照各有可展示的成功結果與 fallback 截圖。
-- [ ] 若有 C# demo，另確認 Windows Web App 的 target framework 與 runtime 相容；不要把 Java jar 部署到該目標。
+- [ ] `VM_SSH_PRIVATE_KEY`（secret）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、
+  `VM_SSH_HOST_KEY`（variables）已設定；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts`
+  行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入。
+- [ ] Azure OIDC federated credential、最小 Azure RBAC 與 workflow `permissions: id-token: write` 的組合已用於 `07.deploy-webapp`（Linux App Service）；確認 subject 對應 repo 與 Environment。
+- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照各有可展示的成功結果與 fallback 截圖；目前尚無 live workflow dispatch 證據，需課前實際 dispatch 驗證。
+- [ ] `TERRAFORM/` 現行 stack 沒有 Windows VM 或 Windows Web App；若未來另有 C# demo 需求，需另行規劃基礎設施，不要把 Java jar 部署到 Linux Java Web App 以外的目標。
 
 ### 行政、連結與備援
 

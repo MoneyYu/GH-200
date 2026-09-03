@@ -37,9 +37,10 @@ Environments. Its full deployment workflow is therefore manual and requires the
 `confirm_production=deploy` input. Use the class repository above when demonstrating the real
 required-reviewer approval gate.
 
-Because GH-200 is private, its deployment workflows do not expose GitHub release assets. OIDC
-uploads each commit's jar and SHA-256 digest to the private `deployments` Azure Blob container;
-the VM downloads them with its system-assigned managed identity.
+Because GH-200 is private, its deployment workflows do not expose GitHub release assets.
+`demo-java-04` through `06` build once and deploy the same Actions artifact over SSH to an
+on-premises-style Ubuntu VM simulation — build, test, package, copy, connect, restart the service,
+then verify the deployed commit SHA — and promote a verified test build to production by SHA.
 
 ### Reusable Demo Environment
 
@@ -47,8 +48,9 @@ the VM downloads them with its system-assigned managed identity.
 - [Java CI/CD workflows](.github/workflows/)
 - [Trainer demo environment guide](docs/demo-environment.md)
 
-`demo-java-01` through `06` are the main Build → Test → Package → Deploy path.
-`demo-java-07` requires the trainer to open the exact temporary `AllowSshForDemo` NSG rule first.
+`demo-java-01` through `06` are the main Build → Test → Package → Deploy path to the
+on-premises VM simulation, over SSH. `demo-java-07` is a contrast that deploys the same Java app
+to a Linux App Service through Azure OIDC — a PaaS/OIDC comparison, not a VM deployment path.
 `demo-java-08` requires registering an ephemeral runner with the `gh200` label; it otherwise stays
 queued by design. The `confirm_production=deploy` input prevents accidental deployment but does
 **not** provide separation of duties; use the MoneyDemo class repo for the real reviewer gate.
@@ -71,7 +73,7 @@ Open the [student lab index](https://github.com/MoneyDemo/20260903-GH200/blob/ma
 and complete `lab01-first-workflow.md` through `lab06-troubleshooting.md`;
 `lab07-selfhosted-runner.md` is optional.
 
-Follow the progressive workflows in `.github/workflows`: `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`. Use `07.deploy-ssh`, `08.selfhosted-runner`, and `09.troubleshooting` as instructor-led contrasts and troubleshooting material.
+Follow the progressive workflows in `.github/workflows`: `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`. Use `07.deploy-webapp`, `08.selfhosted-runner`, and `09.troubleshooting` as instructor-led contrasts and troubleshooting material.
 
 ## Course Info
 ![Course overview](https://mdcontent.yu.money/contents/f008fce23003844339a3ac100.zh-TW.png)
@@ -184,10 +186,10 @@ SVG: [exam.svg](https://mttcontent.yu.money/common/exam.svg)
 
 ## M5 — Secure and Optimize Automation
 - Least-privilege permissions and secure action use
-- OIDC to Azure; environment protection and approval gates
+- SSH deploy spine to the on-premises VM simulation; environment protection and approval gates
 - Test (`8080`) and production (`8081`) systemd services on the Azure Ubuntu 24.04 VM
-- **Deploy spine**: `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`
-- Contrast: `az vm run-command` + OIDC (primary) vs `07.deploy-ssh`
+- **Deploy spine**: `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline` (SSH-only, primary)
+- Contrast: `07.deploy-webapp` — Azure OIDC to a Linux App Service (PaaS/OIDC contrast)
 - Workflow performance and cost optimization
 ```
 
