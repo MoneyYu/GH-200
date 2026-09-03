@@ -167,14 +167,20 @@ $vmIp       = terraform output -raw linux_vm_public_ip
 $webAppName = terraform output -raw web_app_name
 $webAppUrl  = terraform output -raw web_app_url
 $webAppHost = $webAppUrl -replace '^https://', ''
+$rgName     = terraform output -raw resource_group_name
 
 foreach ($repo in @('MoneyYu/GH-200', 'MoneyDemo/20260903-GH200')) {
   gh variable set VM_PUBLIC_IP --body $vmIp --repo $repo
   gh variable set VM_SSH_USER --body azureuser --repo $repo
   gh variable set AZURE_WEB_APP_NAME --body $webAppName --repo $repo
   gh variable set AZURE_WEB_APP_HOSTNAME --body $webAppHost --repo $repo
+  gh variable set AZURE_RESOURCE_GROUP --body $rgName --repo $repo
 }
 ```
+
+`AZURE_RESOURCE_GROUP` 是 `07`／`demo-java-07-deploy-webapp` 的 `az webapp deploy` 步驟
+（Azure CLI JAR deploy）用來鎖定目標 resource group 的 repository variable，只讀名稱、
+不含任何機密資料。
 
 `VM_SSH_HOST_KEY` **不**適合用上面這種批次迴圈：它必須先在受信任管道（例如 Azure
 serial console，或已用其他方式確認身分的初次連線）擷取完整 OpenSSH `known_hosts` 行並
@@ -215,7 +221,7 @@ Get-Content -Raw -LiteralPath $knownHostsPath |
 - [ ] 若示範 VM self-hosted runner，runner 已在 GitHub UI 顯示可用，registration token 僅在註冊當下取得；registration 需要講師以受信任的手動連線／session 完成，且 runner 應用程式須每 30 天內更新一次，否則 GitHub 不會再派工作給它。
 - [ ] 課前用 Azure CLI 確認並啟動（若已 deallocate）SSH 部署目標 VM；`04`/`05`/`06` 的 workflow 完全不含 Azure 登入，也不會自行啟動 VM，VM 未開機或 TCP/22 未開放時 SSH 連線步驟會快速失敗。
 - [ ] `VM_SSH_PRIVATE_KEY`（**設在 `test` 與 `production` 兩個 Environment 各一份的 Environment secret，不是 repository secret**）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、`VM_SSH_HOST_KEY`（variables）已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo** 各自設定（見上方「Terraform outputs → GitHub variables」）；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts` 行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入，VM host key 輪替後需手動更新。
-- [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`（variables）已從 Terraform outputs（`web_app_name`、`web_app_url`）在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp` 專屬的 OIDC identity 已依上方「Azure RBAC for the 07 OIDC identity」在兩個 repo 各自建立，且範圍是精準的該 Linux Web App（`Website Contributor`），未沿用舊有的 VM／Blob 共用 identity。
+- [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`、`AZURE_RESOURCE_GROUP`（variables）已從 Terraform outputs（`web_app_name`、`web_app_url`、`resource_group_name`）在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp` 專屬的 OIDC identity 已依上方「Azure RBAC for the 07 OIDC identity」在兩個 repo 各自建立，且範圍是精準的該 Linux Web App（`Website Contributor`），未沿用舊有的 VM／Blob 共用 identity。
 - [ ] `AZURE_WEBAPP_CLIENT_ID`（secret）已在**兩個 repo**各自設定，提供上述專屬 Web App identity 的 client ID 給 `07`／`demo-java-07-deploy-webapp` 的 `azure/login`；舊的 `AZURE_CLIENT_ID` 目前維持不動，等其他 VM／Blob 相關使用者全部除役後才處理。
 
 Self-hosted runner 不得接收不信任 fork pull request。它保留機器狀態，維護、修補、清理與安全隔離均由講師／管理者負責；runner group 應限縮可使用的 repository。
@@ -295,9 +301,19 @@ Terraform 不會建立 GitHub repository、workflow、Environment、secret、pac
   對目前已對齊的 `07.deploy-webapp`（Linux App Service，`MoneyYu/GH-200` 與
   `MoneyDemo/20260903-GH200` 現行都是這個編號）的驗證。
 - [ ] **尚待課前驗證**：兩個 repo 現行對齊版本的 `07.deploy-webapp`（Linux App
-  Service／OIDC 對照）尚未有 live workflow dispatch 證據；目前只完成程式碼靜態驗證
-  （YAML parse／`bash -n`）。課前須各自用該 repo 專屬的 OIDC identity（見下方 Azure
-  RBAC 小節）實際 dispatch 一次，確認 `azure/login` 與 `azure/webapps-deploy` 成功，
+  Service／OIDC 對照）已有 live workflow dispatch 證據，但曾在舊的
+  `azure/webapps-deploy` 步驟失敗：`MoneyYu/GH-200` run
+  [33814165531](https://github.com/MoneyYu/GH-200/actions/runs/33814165531)、
+  `MoneyDemo/20260903-GH200` run
+  [33814165495](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33814165495)
+  均顯示 `azure/login` 成功、`azure/webapps-deploy` 在 OneDeploy 階段失敗
+  （`Bad Request (CODE: 400)`）。同一份 jar、同一個 App Service 用
+  `az webapp deploy --resource-group ... --name ... --src-path ./target/simpleweb.jar
+  --type jar --restart true --clean true --enable-kudu-warmup true
+  --enriched-errors true` 已驗證部署成功，因此兩個 repo 的 `07` 現已改用明確的
+  Azure CLI JAR deploy 步驟（仍在 `azure/login` OIDC 之後執行）。目前只完成程式碼靜態
+  驗證（YAML parse／`bash -n`）；課前須各自用該 repo 專屬的 OIDC identity（見下方 Azure
+  RBAC 小節）實際 dispatch 一次，確認新的 `az webapp deploy` 步驟成功，
   並用 `/api/info` 的 build SHA 做語意化 smoke test。
 - [ ] **尚待課前驗證**：`MoneyYu/GH-200` 的 SSH-only `04`/`05`/`06`
   尚未有 live workflow dispatch 證據；Terraform 基礎設施**已 apply 完成**（apply 後

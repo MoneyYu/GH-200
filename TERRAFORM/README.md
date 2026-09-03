@@ -13,7 +13,8 @@ backup/fallback stack。課堂中應由 trainer 現場建立 Azure resources；�
   **Build → Test → Package → SCP → SSH → `systemctl` → 語意化 `/api/info` smoke test**
   story。同一台 VM 也可作為 **08** 的 self-hosted runner 課堂簡化示範主機。
 - 一個 Linux App Service plan 與 Java SE 21 Web App，作為 **07** 的 Azure OIDC／PaaS
-  對照 target（`azure/webapps-deploy`），與 SSH VM 路徑並非互相替代。
+  對照 target（Azure CLI JAR deploy：`az webapp deploy`，OIDC 換短期 token 後執行，是
+  已驗證成功的部署方式），與 SSH VM 路徑並非互相替代。
 - 一個 Linux Custom Script VM extension，預先下載並解壓縮 GitHub Actions self-hosted
   runner `v2.337.0` 到 `/opt/actions-runner`。它不會註冊 runner，也不包含 registration
   token。

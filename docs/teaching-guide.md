@@ -89,8 +89,9 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 SSH-only／OIDC-webapp（`07.deploy-webapp`）／same-VM-runner 主線設計；**下表描述的
 SSH-only 主線與 `07` OIDC 對照，現在是兩個 repo 共同的現行主線**，只是各自維護獨立的
 workflow 檔案、GitHub 設定與部署身分（`demo-java-04` 至 `demo-java-07` 對
-`04.deploy-test` 至 `07.deploy-webapp`），且**尚未有該對齊後版本的 live workflow run
-證據**（目前只完成靜態驗證）；課堂這一段 demo 只使用 `MoneyYu/GH-200` 的 workflows。
+`04.deploy-test` 至 `07.deploy-webapp`）；**新 Azure CLI 取代路徑尚無成功的 live run 證據**，
+但 `docs/demo-environment` 已記錄 OIDC 成功、OneDeploy 400 失敗的 action-path 證據；課堂這一段
+demo 只使用 `MoneyYu/GH-200` 的 workflows。
 
 | 項目 | 課堂呈現（`MoneyYu/GH-200`；class repo 現行對齊後的編號相同，但獨立維護） |
 |---|---|
@@ -291,15 +292,15 @@ workflow 檔案、GitHub 設定與部署身分（`demo-java-04` 至 `demo-java-0
   [Trainer demo environment guide](demo-environment.md) 的「Terraform outputs → GitHub
   variables」）。`VM_SSH_HOST_KEY` 必須是完整 OpenSSH `known_hosts`
   行，**不是** `SHA256:` 指紋，且是在受信任網路下取得並人工核對後手動貼入。
-- [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`（variables，來自 Terraform outputs
-  `web_app_name`／`web_app_url`）已在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp`
+- [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`、`AZURE_RESOURCE_GROUP`（variables，來自 Terraform outputs
+  `web_app_name`／`web_app_url`／`resource_group_name`）已在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp`
   各自使用**專屬**的 Azure OIDC federated credential、`Website Contributor`（範圍精準指定
   該 Linux Web App，不是 resource group 或 subscription）與 workflow
   `permissions: id-token: write`，subject 對應「該 repo 自己」的 repo 與 Environment；
   **不沿用** SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity（詳見
   [Trainer demo environment guide](demo-environment.md) 的「Azure RBAC for the 07 OIDC
   identity」）。
-- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照各有可展示的成功結果與 fallback 截圖；目前尚無 live workflow dispatch 證據，需課前實際 dispatch 驗證。
+- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照各有可展示的成功結果與 fallback 截圖；failed action-path dispatch 證據已存在（OIDC 成功後 OneDeploy 400），但新的 Azure CLI 取代步驟尚無成功的 live-dispatch 證據，需課前實際 dispatch 驗證。
 - [ ] `TERRAFORM/` 現行 stack 沒有 Windows VM 或 Windows Web App；若未來另有 C# demo 需求，需另行規劃基礎設施，不要把 Java jar 部署到 Linux Java Web App 以外的目標。
 
 ### 行政、連結與備援
