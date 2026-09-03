@@ -255,6 +255,7 @@ services 為 `enabled`。在第一個 jar 部署前，services 顯示 `inactive`
 - Linux VM 建立完成後，仍須手動將 self-hosted runner 註冊至 GitHub repository、
   organization 或 enterprise；Terraform 不保存 registration token。請參考
   [Adding self-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)。
+- Terraform 會忽略既有 Linux VM 的 `custom_data`，因此後續 cloud-init 變更不會自動套用；若要更新，請透過 SSH/手動方式調整，或刻意重建 VM 讓新設定生效。
 - Linux Web App 使用 Java SE 21。部署前應確認課程 sample application 與 Azure App
   Service Java runtime support。
 - Linux subnet 的 Network Security Group 只持續允許 `8080` 與 `8081`，讓兩個 app
