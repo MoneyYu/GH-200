@@ -291,8 +291,8 @@ workflow 檔案、GitHub 設定與部署身分（`demo-java-04` 至 `demo-java-0
   [Trainer demo environment guide](demo-environment.md) 的「Terraform outputs → GitHub
   variables」）。`VM_SSH_HOST_KEY` 必須是完整 OpenSSH `known_hosts`
   行，**不是** `SHA256:` 指紋，且是在受信任網路下取得並人工核對後手動貼入。
-- [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`（variables，來自 Terraform outputs
-  `web_app_name`／`web_app_url`）已在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp`
+- [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`、`AZURE_RESOURCE_GROUP`（variables，來自 Terraform outputs
+  `web_app_name`／`web_app_url`／`resource_group_name`）已在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp`
   各自使用**專屬**的 Azure OIDC federated credential、`Website Contributor`（範圍精準指定
   該 Linux Web App，不是 resource group 或 subscription）與 workflow
   `permissions: id-token: write`，subject 對應「該 repo 自己」的 repo 與 Environment；
