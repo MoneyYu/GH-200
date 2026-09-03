@@ -1,65 +1,69 @@
 package money.gh200.simpleweb;
 
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Properties;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Build-provenance guard. The compiled {@code application.yml} on the classpath must
- * carry the build SHA that Maven resource filtering embedded at build time, and must
- * never defer that value to a runtime {@code APP_BUILD_SHA} environment variable.
+ * Build-provenance guard for the generated artifact resource. The compiled
+ * {@code /build-metadata.properties} on the classpath must carry the concrete build SHA/time
+ * that Maven resource filtering embedded at package time, and must never mention the runtime
+ * {@code APP_BUILD_SHA} / {@code APP_BUILD_TIME} environment variables.
  *
- * <p>Against the unfiltered source this fails, because the build section still holds
- * the runtime placeholder {@code ${APP_BUILD_SHA:dev}}. It passes only once resource
- * filtering replaces the {@code @app.build.sha@} token with the configured value.
+ * <p>The surefire configuration exposes the Maven {@code app.build.sha} / {@code app.build.time}
+ * properties as the {@code expected.build.*} system properties, so this test can assert the
+ * generated resource embeds <em>exactly</em> the value Maven was given &mdash; whether that is the
+ * {@code dev}/{@code unknown} default or a {@code -Dapp.build.sha} CI override.
  */
 class BuildMetadataFilteringTest {
 
-    private static final Pattern SHA_LINE = Pattern.compile("(?m)^\\s*sha:\\s*(\\S+)\\s*$");
-    private static final Pattern TIME_LINE = Pattern.compile("(?m)^\\s*time:\\s*(\\S+)\\s*$");
-
-    private String compiledApplicationYml() throws Exception {
-        try (InputStream in = getClass().getResourceAsStream("/application.yml")) {
-            assertThat(in).as("classpath application.yml").isNotNull();
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    private Properties compiledBuildMetadata() throws Exception {
+        Properties props = new Properties();
+        try (InputStream in = getClass().getResourceAsStream("/build-metadata.properties")) {
+            assertThat(in).as("classpath /build-metadata.properties").isNotNull();
+            props.load(in);
         }
+        return props;
     }
 
     @Test
-    @DisplayName("建置後的 application.yml 內嵌 build 資訊，不再讀取 APP_BUILD_SHA/TIME 執行期環境變數")
-    void applicationYmlEmbedsFilteredBuildMetadataInsteadOfRuntimeEnv() throws Exception {
-        String yml = compiledApplicationYml();
+    @DisplayName("產生的 build-metadata.properties 內嵌具體值，且不提及 APP_BUILD_SHA/TIME 執行期環境變數")
+    void filteredResourceHoldsConcreteValuesAndNoRuntimeEnvNames() throws Exception {
+        Properties props = compiledBuildMetadata();
 
-        assertThat(yml)
-                .as("build metadata must be embedded by Maven filtering, not read from the runtime environment")
-                .doesNotContain("APP_BUILD_SHA")
+        String sha = props.getProperty("app.build.sha");
+        String time = props.getProperty("app.build.time");
+
+        assertThat(sha)
+                .as("app.build.sha must be a concrete filtered value, not an unresolved token")
+                .isNotBlank()
+                .doesNotContain("@")
+                .doesNotStartWith("${")
+                .doesNotContain("APP_BUILD_SHA");
+        assertThat(time)
+                .as("app.build.time must be a concrete filtered value, not an unresolved token")
+                .isNotBlank()
+                .doesNotContain("@")
+                .doesNotStartWith("${")
                 .doesNotContain("APP_BUILD_TIME");
+    }
 
-        assertThat(yml)
-                .as("Maven resource filtering must have replaced the build metadata tokens")
-                .doesNotContain("@app.build.sha@")
-                .doesNotContain("@app.build.time@");
+    @Test
+    @EnabledIfSystemProperty(named = "expected.build.sha", matches = ".+")
+    @DisplayName("Maven -Dapp.build.sha/-Dapp.build.time 會被精準地烤進 build-metadata.properties")
+    void filteredResourceMatchesTheMavenPropertyExactly() throws Exception {
+        Properties props = compiledBuildMetadata();
 
-        Matcher shaMatcher = SHA_LINE.matcher(yml);
-        assertThat(shaMatcher.find()).as("app.build.sha line present").isTrue();
-        assertThat(shaMatcher.group(1))
-                .as("app.build.sha must be a concrete filtered value")
-                .doesNotStartWith("${")
-                .doesNotContain("@")
-                .isNotBlank();
-
-        Matcher timeMatcher = TIME_LINE.matcher(yml);
-        assertThat(timeMatcher.find()).as("app.build.time line present").isTrue();
-        assertThat(timeMatcher.group(1))
-                .as("app.build.time must be a concrete filtered value")
-                .doesNotStartWith("${")
-                .doesNotContain("@")
-                .isNotBlank();
+        assertThat(props.getProperty("app.build.sha"))
+                .as("generated app.build.sha must equal the Maven app.build.sha property exactly")
+                .isEqualTo(System.getProperty("expected.build.sha"));
+        assertThat(props.getProperty("app.build.time"))
+                .as("generated app.build.time must equal the Maven app.build.time property exactly")
+                .isEqualTo(System.getProperty("expected.build.time"));
     }
 }
