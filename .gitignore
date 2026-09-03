@@ -46,3 +46,9 @@ __pycache__/
 # Local link-check ledgers and scratch output
 urls*.txt
 linkcheck*.csv
+###############################################################################
+# Java demo application
+###############################################################################
+target/
+.idea/
+*.iml
