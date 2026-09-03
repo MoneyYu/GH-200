@@ -12,14 +12,6 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.7"
     }
-    http = {
-      source  = "hashicorp/http"
-      version = "~> 3.5"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
-    }
   }
 }
 
@@ -37,22 +29,19 @@ variable "group_postfix" {
   }
 }
 
-variable "user_name" {
+variable "linux_ssh_public_key" {
   type        = string
-  default     = "demouser"
-  description = "Local administrator username for the Windows VM."
-}
+  description = "Existing SSH public key for the Linux VM admin user. Supply it at runtime from a local .pub file."
 
-variable "user_password" {
-  type        = string
-  sensitive   = true
-  description = "Local administrator password for the Windows VM. Supply it at runtime."
+  validation {
+    condition     = length(trimspace(var.linux_ssh_public_key)) > 0
+    error_message = "linux_ssh_public_key must not be empty."
+  }
 }
 
 locals {
   group_name      = "GH200-${var.group_postfix}"
   location        = "japaneast"
-  vm_size         = "Standard_B4ms"
   linux_vm_size   = "Standard_B2s"
   linux_admin     = "azureuser"
   random_str      = "ksh"
@@ -63,12 +52,6 @@ locals {
     environment     = local.group_name
     SecurityControl = "Ignore"
   }
-}
-
-data "http" "myip" {
-  url = "https://ipv4.icanhazip.com"
-
-  # use: data.http.myip.response_body
 }
 
 data "azurerm_client_config" "current" {}

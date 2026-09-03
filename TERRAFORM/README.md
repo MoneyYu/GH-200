@@ -8,15 +8,15 @@ backup/fallback stack。課堂中應由 trainer 現場建立 Azure resources；�
 
 此 stack 建立：
 
-- 一部具 system-assigned managed identity 的 Windows Server 2022 VM，包含
-  Microsoft Entra ID login extension 與 IIS。這是既有 C# / Windows runner fallback；
-  在官方 7-module Learn 結構對應 enterprise runner 主題，但**不屬於本場移除 M3 後的
-  Java hands-on 主線**。
-- 一個 Windows App Service plan 與 Windows Web App。
-  作為既有 C# `azure/webapps-deploy` fallback，本場 Java 主線不使用它。
-- 一部具 system-assigned managed identity 的 Ubuntu 24.04 LTS VM，預先安裝 OpenJDK 21，
-  作為 **Java** demo 的 deployment target，用於呈現
-  **Build → Test → Package → Deploy** story。既有 Windows VM 與 Web App 仍專供 C# demos。
+- 一部 Ubuntu 24.04 LTS VM，預先安裝 OpenJDK 21，模擬 **on-prem application server**，
+  作為 **04-06 SSH-only** Java deployment demo 的主要 target，呈現
+  **Build → Test → Package → SCP → SSH → `systemctl` → 語意化 `/api/info` smoke test**
+  story。同一台 VM 也可作為 **08** 的 self-hosted runner 課堂簡化示範主機。
+- 一個 Linux App Service plan 與 Java SE 21 Web App，作為 **07** 的 Azure OIDC／PaaS
+  對照 target（`azure/webapps-deploy`），與 SSH VM 路徑並非互相替代。
+- 一個 Linux Custom Script VM extension，預先下載並解壓縮 GitHub Actions self-hosted
+  runner `v2.337.0` 到 `/opt/actions-runner`。它不會註冊 runner，也不包含 registration
+  token。
 
 ## Prerequisites
 
@@ -25,31 +25,30 @@ backup/fallback stack。課堂中應由 trainer 現場建立 Azure resources；�
 - 可建立 resources 的 Azure subscription
 - 在 `japaneast` region 具備所需 quota
 - 由環境提供 Azure subscription，例如設定 `ARM_SUBSCRIPTION_ID`
-- 若要使用 Microsoft Entra ID 登入 VM，登入者需在 VM 或其上層 scope 取得
-  `Virtual Machine Administrator Login` 或 `Virtual Machine User Login` role；
-  `Owner` / `Contributor` 本身不授予 VM 登入權限。
+- Linux VM 使用 SSH key authentication。Terraform 只需要 public key；請勿將 private
+  key 放入 Terraform state、`.tfvars` 或 repo。
 
 ## Variables
 
 | Name | Type | Default | Required? | Description |
 |---|---|---:|:---:|---|
 | `group_postfix` | `string` | 無 | 是 | Resource group suffix；只接受 1–10 個小寫英文字母或數字，符合 `^[a-z0-9]{1,10}$`。 |
-| `user_name` | `string` | `demouser` | 否 | Windows VM 的 local administrator username。 |
-| `user_password` | `string` | 無 | 是 | Windows VM 的 local administrator password；為 sensitive variable，必須在執行時提供。 |
+| `linux_ssh_public_key` | `string` | 無 | 是 | Linux VM admin user (`azureuser`) 的 SSH public key。請從本機 `.pub` 檔案讀入。 |
 
-建議透過 `TF_VAR_user_password` 提供密碼，避免把密碼寫入 `.tf` 或命令歷程：
+建議透過 `TF_VAR_linux_ssh_public_key` 提供 public key，避免將任何 SSH private key material
+寫入 `.tf`、`.tfvars` 或命令歷程：
 
 ```powershell
-$securePassword = Read-Host "Enter the VM administrator password" -AsSecureString
-$env:TF_VAR_user_password = [System.Net.NetworkCredential]::new("", $securePassword).Password
+$pubKeyPath = Join-Path $HOME ".ssh\gh200-linux.pub"
+$env:TF_VAR_linux_ssh_public_key = (Get-Content -Raw $pubKeyPath).Trim()
 ```
 
-也可使用 `-var "user_password=<password>"`，但密碼可能留在 shell history，因此不建議。
+保留 private key 於使用者自己的 `.ssh` 目錄，並依 SSH key 一般安全做法限制檔案權限。
 
 ## Remote state backend
 
-本場已將 state 遷移到 Azure Storage，避免 VM password 與 generated SSH private key
-留在多人可讀的本機 `terraform.tfstate`：
+本場已將 state 遷移到 Azure Storage，避免 Terraform state 留在多人可讀的本機
+`terraform.tfstate`：
 
 | 項目 | 值 |
 |---|---|
@@ -77,68 +76,40 @@ terraform init `
 不要刪除 storage account/container，也不要把 state 下載後 commit。若要交接講師，請在
 storage account scope 指派最小必要的 data-plane role；不要啟用 shared key。
 
-### Private deployment artifact container
+### Deprecated Blob artifact container (unmanaged, do not delete)
 
-因 `MoneyYu/GH-200` 是 private repo，Java CD workflows 使用同一個 AAD-only storage
-account 的獨立 `deployments` container，不使用匿名 GitHub Release URL。Backend
-`tfstate` container 與 application artifact container 的 RBAC scope 完全分開。
+`MoneyYu/GH-200` 的 Java CD workflows（`04`/`05`/`06`）先前曾用同一個 AAD-only storage
+account 的 `deployments` container 搬運 build artifact（OIDC 上傳、VM managed-identity
+下載）。**這個 deploy 機制已被 SSH-only 取代**：現行 workflows 改用
+`actions/upload-artifact`／`actions/download-artifact` 保存 jar，並以 GitHub secret
+`VM_SSH_PRIVATE_KEY` 透過 SCP/SSH 直接部署到 VM，不再讀寫 `deployments` container。
 
-一次性 bootstrap（目前環境已完成）：
-
-```powershell
-$storageAccount = "gh200state0903ksh"
-$resourceGroup = "GH200-0903"
-$container = "deployments"
-$accountId = az storage account show `
-  --resource-group $resourceGroup `
-  --name $storageAccount `
-  --query id --output tsv
-$containerScope = "$accountId/blobServices/default/containers/$container"
-
-az storage container create `
-  --account-name $storageAccount `
-  --name $container `
-  --auth-mode login
-
-# GitHub OIDC service principal 的 object ID（不是 client/application ID）
-$deploymentPrincipalId = "<OIDC_SERVICE_PRINCIPAL_OBJECT_ID>"
-az role assignment create `
-  --assignee-object-id $deploymentPrincipalId `
-  --assignee-principal-type ServicePrincipal `
-  --role "Storage Blob Data Contributor" `
-  --scope $containerScope
-
-$vmPrincipalId = az vm show `
-  --resource-group $resourceGroup `
-  --name "lab-linux-0903-ksh" `
-  --query identity.principalId --output tsv
-az role assignment create `
-  --assignee-object-id $vmPrincipalId `
-  --assignee-principal-type ServicePrincipal `
-  --role "Storage Blob Data Reader" `
-  --scope $containerScope
-
-gh variable set AZURE_STORAGE_ACCOUNT `
-  --repo MoneyYu/GH-200 `
-  --body $storageAccount
-```
-
-Workflows 04/06 以 `az storage blob upload --auth-mode login` 寫入
-`deployments/builds/<commit-sha>/`；VM 透過 IMDS managed-identity token 讀取。不要把
-GitHub token、Storage key 或 SAS token 傳入 Run Command。
+`deployments` container 本身**維持既有、不受 Terraform 管理**的狀態：不要刪除它，也不要
+把它當孤兒資源清理；它與 backend 使用的 `tfstate` container 的 RBAC scope 仍然分開。若未來
+確認不再需要，交由講師/使用者另行決定是否移除，本文不在此指示刪除。
 
 ## Usage
 
 ```powershell
 cd TERRAFORM
 # 先依上節初始化 remote backend
+$env:TF_VAR_linux_ssh_public_key = (Get-Content -Raw "$HOME\.ssh\gh200-linux.pub").Trim()
 terraform plan -var "group_postfix=0903"
 ```
 
 > [!WARNING]
-> 本 repo 明確禁止 AI agent 執行 `terraform apply`。Trainer 檢查 plan 後，必須自行手動執行：
+> 本 repo 明確禁止 AI agent 執行 `terraform apply`。此 stack 在 SSH-only 重構之前，`GH200-0903`
+> 已有一次不同、已完成的歷史 apply（`18 added, 0 changed, 0 destroyed`，建立含 Windows VM/Web
+> App 的舊有 topology）。**SSH-only 重構本身**（移除 Windows VM/Web App、改用
+> `linux_ssh_public_key`、加入 `AllowSshFromAzureCloud`、runner 預先安裝 extension）那次使用者
+> 授權的**一次** reviewed apply **已經完成**：Windows stack 已移除、Linux Java Web App 與 runner
+> 預先安裝 extension 已建立、NSG 已更新（來源受限的 `AllowSshFromAzureCloud`），且 apply 後的
+> `terraform plan` 乾淨無漂移。該次授權已用罄——**不得再執行或指示任何 `apply`**；每一次額外的
+> apply 都需要使用者新的明確授權。權威政策見 `.github/copilot-instructions.md` 的 apply/destroy
+> 單一真相段落，本文不重述不同版本。下列 `apply` 指令僅供了解語法，AI agent 不得執行：
 >
 > ```powershell
+> $env:TF_VAR_linux_ssh_public_key = (Get-Content -Raw "$HOME\.ssh\gh200-linux.pub").Trim()
 > terraform apply -var "group_postfix=0903"
 > ```
 
@@ -147,35 +118,32 @@ terraform plan -var "group_postfix=0903"
 | Name | Description |
 |---|---|
 | `resource_group_name` | Backup environment 所在的 resource group。 |
-| `vm_name` | C# / self-hosted runner demo 使用的 Windows VM 名稱。 |
-| `vm_public_ip_address` | Windows VM public IP。 |
-| `web_app_name` | C# demo 使用的 Windows Web App 名稱。 |
-| `web_app_url` | Windows Web App HTTPS URL。 |
-| `app_service_plan_name` | Windows Web App 所在的 App Service plan。 |
+| `web_app_name` | Java deployment demo 使用的 Linux Web App 名稱。 |
+| `web_app_url` | Linux Java Web App HTTPS URL。 |
+| `app_service_plan_name` | Linux Java Web App 所在的 App Service plan。 |
 | `linux_vm_name` | Java deployment demo 使用的 Ubuntu VM 名稱。 |
 | `linux_vm_public_ip` | Ubuntu VM public IP。 |
 | `linux_ssh_command` | 可直接貼上的 `ssh -i <key-path> azureuser@<ip>` 指令（使用預設 key path）。 |
 | `app_test_url` | Test environment URL（port `8080`）。 |
 | `app_prod_url` | Production environment URL（port `8081`）。 |
-| `linux_ssh_private_key` | Ubuntu VM SSH private key；為 sensitive output。 |
 
-SSH private key 只存在 Terraform state，不會寫入 repo。需要 SSH 時，請將它存到使用者的
-`.ssh` 目錄，而非 `TERRAFORM`：
+SSH private key 不由 Terraform 產生，也不會寫入 Terraform state。需要 SSH 時，請使用
+本機 private key 搭配 Terraform output 的 public IP：
 
 ```powershell
 $keyPath = Join-Path $HOME ".ssh\gh200-linux"
-(terraform output -raw linux_ssh_private_key) |
-  Set-Content -Encoding ascii $keyPath
 ssh -i $keyPath azureuser@$(terraform output -raw linux_vm_public_ip)
 ```
 
-請像保護其他 private key 一樣限制該檔案的存取權，使用完畢後安全移除。
+請像保護其他 private key 一樣限制該檔案的存取權。
 
-課程結束後，由 trainer 手動清除本 stack：
+`terraform destroy` **只能在使用者提出新的明確要求並確認後**，才由 trainer 手動執行；課程
+開始前絕對不得執行，也不得因為例行清理、policy 掃描或維運方便而自行觸發：
 
 ```powershell
+$env:TF_VAR_linux_ssh_public_key = (Get-Content -Raw "$HOME\.ssh\gh200-linux.pub").Trim()
 terraform destroy -var "group_postfix=0903"
-Remove-Item Env:\TF_VAR_user_password
+Remove-Item Env:\TF_VAR_linux_ssh_public_key
 ```
 
 ## Naming
@@ -185,17 +153,14 @@ Remove-Item Env:\TF_VAR_user_password
 `local.resource_suffix = "<group_postfix>-<random_str>"`；固定的
 `local.random_str = "ksh"` 讓同一場次重跑時名稱維持穩定：
 
-- VM：`lab-vm-0903-ksh`
-- Public IP：`lab-pip-0903-ksh`
 - Virtual network：`lab-vnet-0903-ksh`
-- Network interface：`lab-nic-0903-ksh`
 - Linux VM：`lab-linux-0903-ksh`
 - Linux subnet：`lab-linux-subnet-0903-ksh`
 - Linux public IP：`lab-linux-pip-0903-ksh`
 - Linux network interface：`lab-linux-nic-0903-ksh`
 - Linux Network Security Group：`lab-linux-nsg-0903-ksh`
 - App Service plan：`lab-app-plan-0903-ksh`
-- Windows Web App：`gh200-web-0903-ksh`
+- Linux Java Web App：`gh200-java-web-0903-ksh`
 
 ## Java VM deployment layout
 
@@ -207,26 +172,60 @@ deployment directories 與 systemd services：
 | Test | `/opt/simpleweb/test/simpleweb.jar` | `/opt/simpleweb/test/app.env` | `simpleweb-test.service` | `8080` |
 | Production | `/opt/simpleweb/prod/simpleweb.jar` | `/opt/simpleweb/prod/app.env` | `simpleweb-prod.service` | `8081` |
 
-`app.env` 是 optional，可由 deployment workflow 寫入 `APP_BUILD_SHA` 與
-`APP_BUILD_TIME`。Cloud-init 只執行 `systemctl enable`，不會在 jar 尚未部署時啟動
-services；workflow 應在放置 jar 與 environment file 後執行
+`app.env` 是 optional 的 `EnvironmentFile=-`（缺檔也能啟動）。build provenance（完整
+commit SHA 與 UTC build 時間）現在於 build 階段由 Maven resource filtering 烤進 jar，
+deployment workflow **不再**寫入 `APP_BUILD_SHA`／`APP_BUILD_TIME`；版本佐證一律來自
+`/api/info`（artifact 本身），不靠外部設定。`APP_ENVIRONMENT` 仍由 systemd unit 的
+`Environment=` 指令提供。Cloud-init 只執行 `systemctl enable`，不會在 jar 尚未部署時啟動
+services；workflow 應在放置 jar 後執行
 `sudo systemctl restart simpleweb-test.service` 或
 `sudo systemctl restart simpleweb-prod.service`。
 
 Azure Ubuntu image 預設授予 admin user `azureuser` passwordless sudo，因此 SSH
 deployment 可用 `sudo install` / `sudo mv` 將檔案放入 `/opt/simpleweb`，並 restart
-service。`az vm run-command invoke` 以 `root` 執行，可直接寫入相同路徑及操作 systemd。
-兩種路徑最後都應將 jar 與 `app.env` ownership 設為 `simpleweb:simpleweb`。
+service。這是 `04`/`05`/`06` 目前實際採用的路徑；jar 與 `app.env` 最後都應將
+ownership 設為 `simpleweb:simpleweb`。
+
+### OS disk storage type
+
+既有 Linux VM 的 OS disk（`lab-linux-osdisk-0903-ksh`）在 Azure 上實際是 `Standard_LRS`。
+`os_disk.storage_account_type` 因此維持 `Standard_LRS`，而不是改成 `Premium_LRS`：兩者不
+一致會讓 `storage_account_type` 觸發 `forces replacement`，導致下一次 `plan`／`apply` 把
+既有 `azurerm_linux_virtual_machine.lab` 整台重建——不只違反「保留既有 Linux VM」的需求，
+重建還會繞過 `admin_ssh_key`／`custom_data` 的 `lifecycle.ignore_changes`（那只在原地更新時
+生效，資源被整個換掉時不適用），等於用一次意外的 replace 蓋掉課前已完成的 out-of-band SSH
+金鑰輪替。維持 `Standard_LRS` 才能讓 `terraform plan` 對這台既有 VM 保持 clean（no changes/
+no replacement），也符合共享 subscription policy 對既有 disk 的實際狀態。這裡刻意只改這一
+個欄位，不對 `os_disk` 加上整體的 `ignore_changes`——後者會連未來刻意的欄位變更都靜默吃掉，
+掩蓋而非解決這個落差。
 
 ### Post-apply verification
 
 `terraform apply` 完成只代表 Azure VM control plane provisioning 已完成；第一次開機的
 cloud-init（包含 OpenJDK 21 安裝與 systemd units 建立）可能仍在背景執行。**先等待
-cloud-init 完成，再檢查 Java 與 services**，避免把正常的初始收斂誤判為部署失敗：
+cloud-init 完成，再檢查 Java 與 services**，避免把正常的初始收斂誤判為部署失敗。驗證改用
+trainer 自己的 SSH private key 連線，**不要**印出 private key 內容或把它寫進任何 log。
+
+> [!IMPORTANT]
+> `lab-linux-nsg-0903-ksh` 只允許來源 `AzureCloud` 連入 TCP/22（`AllowSshFromAzureCloud`）；
+> 一般講師筆電所在的網路**不在** `AzureCloud` 這個 service tag 內，直接從筆電 SSH 會被
+> NSG 擋下。下列 post-apply 驗證、以及「Notes and known limitations」的 runner registration
+> 手動連線，都必須從 **Azure Cloud Shell** 或其他已被 NSG 明確允許的受信任網路執行，而不是
+> 一般筆電。**不要**為了讓筆電能連而放寬 NSG（開放 `Internet` 來源或新增臨時規則）；也不要
+> 走 Azure Run Command 或 Arc 之類的替代連線路徑——本 stack 刻意不採用那些機制。
+
+主機指紋**不使用** `StrictHostKeyChecking=accept-new`，也不使用 `ssh-keyscan` 或任何
+per-run TOFU（trust-on-first-use）；一律使用已釘選在 repository variable
+`VM_SSH_HOST_KEY` 的完整 OpenSSH `known_hosts` 行，搭配 `StrictHostKeyChecking=yes`、明確
+`UserKnownHostsFile` 與 `GlobalKnownHostsFile=/dev/null`。`VM_SSH_HOST_KEY` 必須先在受信任
+管道（例如 Azure serial console，或已用其他方式確認身分的初次連線）擷取並人工核對後才寫入
+該 repository variable；這裡只讀出已核對過的值，不重新掃描：
 
 ```powershell
-$resourceGroup = terraform output -raw resource_group_name
-$linuxVm = terraform output -raw linux_vm_name
+$linuxIp = terraform output -raw linux_vm_public_ip
+$keyPath = Join-Path $HOME ".ssh\gh200-linux"
+$knownHostsPath = Join-Path $HOME ".ssh\gh200-linux-known-hosts"
+gh variable get VM_SSH_HOST_KEY --repo MoneyYu/GH-200 | Set-Content -NoNewline $knownHostsPath
 $verifyScript = (@'
 set -e
 cloud-init status --wait --long || true
@@ -237,63 +236,44 @@ systemctl is-enabled simpleweb-test.service simpleweb-prod.service
 systemctl is-active simpleweb-test.service simpleweb-prod.service || true
 '@ -replace "`r", "")
 
-az vm show `
-  --resource-group $resourceGroup `
-  --name $linuxVm `
-  --query provisioningState `
-  --output tsv
-
-az vm run-command invoke `
-  --resource-group $resourceGroup `
-  --name $linuxVm `
-  --command-id RunShellScript `
-  --scripts $verifyScript `
-  --query "value[0].message" `
-  --output tsv
+ssh -i $keyPath `
+  -o StrictHostKeyChecking=yes `
+  -o "UserKnownHostsFile=$knownHostsPath" `
+  -o GlobalKnownHostsFile=/dev/null `
+  azureuser@$linuxIp "$verifyScript"
+Remove-Item $knownHostsPath
 ```
 
 預期：cloud-init 為 `done`、Java 為 OpenJDK 21、兩個目錄由 `simpleweb` 擁有、兩個
-services 為 `enabled`。在第一個 jar 部署前，services 顯示 `inactive` 是正常狀態。
+services 為 `enabled`。在第一個 jar 部署前，services 顯示 `inactive` 是正常狀態。此驗證
+只使用本機已存在的 private key 檔案與已釘選的 host key，指令與輸出都不得包含金鑰內容。
 
 ## Notes and known limitations
 
-- 此 stack 只建立 Azure infrastructure，沒有 application/data-plane automation。
-- VM 的 Standard public IP 已連接至 network interface，但此 stack 未建立 Network Security
-  Group 或 inbound rules；如需 RDP 或瀏覽 IIS，trainer 必須另外建立限制來源 IP 的 rule。
-- VM 建立完成後，仍須手動將 self-hosted runner 註冊至 GitHub repository、
-  organization 或 enterprise。請參考
+- 此 stack 只建立 Azure infrastructure 與 runner binary preinstall，沒有 application
+  artifact deployment automation。
+- VM extension 只會把 runner binary 預先下載並解壓縮到 `/opt/actions-runner`；**註冊
+  runner 仍需要一次短效 registration token，且必須由講師以受信任的手動連線／session**
+  （例如 SSH 到該 VM）完成 `config.sh` 與啟動 runner service，Terraform 不會、也不能
+  自動化這一步。這次 SSH 連線同樣只允許來源 `AzureCloud`，**必須從 Azure Cloud Shell 或
+  其他已被 NSG 明確允許的受信任網路**執行，一般講師筆電無法直接連線；請參考
   [Adding self-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)。
-- Stack 會建立 `AADLoginForWindows` 所需的 system-assigned managed identity，但不替任何
-  trainer/user 建立 VM login role assignment。使用 Microsoft Entra ID 登入前，請依
-  [Sign in to a Windows VM using Microsoft Entra ID and Azure RBAC](https://learn.microsoft.com/en-us/entra/identity/devices/howto-vm-sign-in-azure-ad-windows#configure-role-assignments)
-  指派 `Virtual Machine Administrator Login` 或 `Virtual Machine User Login`。
-- `user_password` 標示為 sensitive 可避免一般 CLI output 顯示，但 Terraform state
-  仍會保存 VM administrator password；請使用安全的 remote backend 與適當 access control。
-- Windows Web App 使用 .NET 8。部署前應確認課程 sample application 的 target framework
-  與 Azure App Service runtime support。
-- Linux subnet 的 Network Security Group 只持續允許 `8080` 與 `8081`，讓兩個 app
-  environments 可公開測試。共享 subscription 的 policy 會移除持續開放的 Internet
-  SSH rule；需要示範 `07.deploy-ssh` 時，由講師在 demo 前建立**精確命名、短生命週期**
-  的 rule，完成後立即移除：
-
-  ```powershell
-  az network nsg rule create `
-    --resource-group GH200-0903 `
-    --nsg-name lab-linux-nsg-0903-ksh `
-    --name AllowSshForDemo `
-    --priority 100 `
-    --access Allow --direction Inbound --protocol Tcp `
-    --source-address-prefixes Internet `
-    --destination-port-ranges 22
-
-  # SSH demo 完成後
-  az network nsg rule delete `
-    --resource-group GH200-0903 `
-    --nsg-name lab-linux-nsg-0903-ksh `
-    --name AllowSshForDemo
-  ```
-
-  SSH 僅允許 key authentication，但開放期間 VM 仍暴露於 Internet；正式環境應改用
-  self-hosted runner、固定 egress、Azure Bastion、private networking 或 allowlist。
-- `data.http.myip` 未用於 Linux SSH rule，因為將來源限制為 trainer IP 會阻擋
-  GitHub-hosted runner。
+- `linux_ssh_public_key` 只用於**建立新 VM**時設定 admin SSH public key；既有 VM 的
+  `admin_ssh_key` 已被 `ignore_changes` 忽略，讓講師可在 Terraform 之外做受控的金鑰輪替，
+  而不會被下一次 `plan`/`apply` 覆蓋或觸發重建。SSH private key 永遠不會回到 Terraform
+  state。
+  - **本次交付的金鑰輪替證據（trainer-only）**：既有 VM 的 SSH 金鑰已在 apply **之前**於
+    Terraform 之外（out-of-band）完成輪替——直接在 VM 上以新的 public key 取代舊的
+    `authorized_keys`、用替換後的金鑰實際連線測試通過、並撤銷（revoke）舊金鑰的存取。此
+    輪替**不是**由 Terraform 執行；`linux_ssh_public_key` 僅在日後**建立新 VM**時作為 seed，
+    不會回寫或輪替既有 VM 的金鑰。本文件不重新產生也不揭露任何金鑰內容。
+- Terraform 會忽略既有 Linux VM 的 `custom_data`，因此後續 cloud-init 變更不會自動套用；若要更新，請透過 SSH/手動方式調整，或刻意重建 VM 讓新設定生效。
+- Linux Web App 使用 Java SE 21。部署前應確認課程 sample application 與 Azure App
+  Service Java runtime support。
+- Linux subnet 的 Network Security Group 持續允許 `8080` 與 `8081`，讓兩個 app
+  environments 可公開測試；SSH (`22`) 由 Terraform 管理的 `AllowSshFromAzureCloud`
+  規則持續允許來源 `AzureCloud`，供 GitHub-hosted runner 執行 `04`/`05`/`06` 的 SSH
+  部署使用，**必須實際從 GitHub-hosted runner 連線測試**，不能只看 `terraform plan`。
+  若共享 subscription 的 policy 掃描移除了這條規則，由講師/使用者手動還原相同的
+  `AllowSshFromAzureCloud` 設定；**不要**把它靜默放寬為允許 `Internet` 來源，也不要新增
+  臨時的 Internet-facing SSH 規則。
