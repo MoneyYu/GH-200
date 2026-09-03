@@ -28,9 +28,17 @@ Progressive workflow 是 `01.build` → `02.build-test` → `03.package-artifact
 `08.selfhosted-runner`、`09.troubleshooting` 是對照／診斷材料，而不是主線的替代方案：
 `07` 是 Azure OIDC/PaaS 對照，`08` 是同一台 VM 上的 self-hosted runner 對照。
 
-### 2026-09-03 班級 repo 已部署環境
+### 2026-09-03 班級 repo 已部署環境（pre-refactor 歷史紀錄）
 
-| 項目 | 實際值／驗證 |
+> **這是 pre-refactor 歷史證據，不是目前的教學路徑。** 下表的 run 都在 class repo
+> SSH-only 對齊（見下方「MoneyYu/GH-200 self-contained workflows」與
+> `07.deploy-webapp`／`08.selfhosted-runner` 現行編號）**之前**完成，當時 class repo 自己的
+> `04` 走 Azure OIDC + `az vm run-command`、`07` 才是 SSH 對照。這些 run 只證明「該次交付
+> 曾經成功 apply／執行過」，**不能**當作目前 SSH-only `04`-`06`、`07.deploy-webapp`（App
+> Service/OIDC 對照）或 `08.selfhosted-runner`（same-VM 對照）已經 live 驗證成功；也不要
+> 誤讀成當時的 run 使用 SSH——它們用的是 Run Command／digest transport。
+
+| 項目 | 實際值／驗證（pre-refactor） |
 |---|---|
 | Resource group | `GH200-0903` |
 | Linux VM | `lab-linux-0903-ksh`（OpenJDK `21.0.12`） |
@@ -39,13 +47,16 @@ Progressive workflow 是 `01.build` → `02.build-test` → `03.package-artifact
 | OIDC test deployment | [Run 33673846495](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33673846495) — immutable per-SHA asset、Run Command sentinel、digest、build SHA 全部驗證 |
 | Production approval | [Run 33673569379](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33673569379) 曾進入 `waiting`，核准後只 promote 指定 SHA |
 | Full pipeline | [Run 33673131527](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33673131527) — Build / Test / Package / digest / test / approval / production 全部成功 |
-| SSH deployment | [Run 33659763233](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33659763233) |
+| SSH deployment | [Run 33659763233](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33659763233) — class repo 當時獨立的 `07` SSH 風險對照，非現行 `04`-`06` SSH-only 主線 |
 | Ephemeral self-hosted runner | [Run 33660507745](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33660507745)；完成後 runner 自動解除 |
 | Troubleshooting failure | [Run 33660678534](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33660678534) — 故意失敗的教材 |
 
 以上 run 都來自 public class repo `MoneyDemo/20260903-GH200`，記錄該次交付當時已完成的
-歷史 run；它與下方 `MoneyYu/GH-200` self-contained workflows 目前採用的 SSH-only
-機制是兩套獨立設定，不代表 `MoneyYu/GH-200` 現在也使用 Run Command 或 digest transport。
+pre-refactor 歷史 run；它與下方 `MoneyYu/GH-200` self-contained workflows 目前採用的
+SSH-only 機制是兩套獨立設定，不代表 `MoneyYu/GH-200` 現在也使用 Run Command 或 digest
+transport。class repo 自身的 `04`-`06`／`07`／`08` 編號已在後續對齊工作中改為與
+`MoneyYu/GH-200` 相同的 SSH-only／OIDC-webapp／same-VM-runner 主線設計（見下一節），但
+**尚未有該次對齊後的 live workflow run**——目前只完成程式碼與 Terraform 的靜態驗證。
 
 ### MoneyYu/GH-200 self-contained workflows
 
@@ -96,8 +107,8 @@ MoneyYu organization 的方案不支援 Environment required reviewers（API 回
 
 OIDC 建立 GitHub Actions 與 **Azure** 的 workload identity federation；它不取代用於 GitHub API 的 `GITHUB_TOKEN`。講師在 Azure 端為 class repo 的實際觸發條件建立 federated credential，subject 必須精準限制於使用的 repository、branch 或 GitHub Environment；workflow job 必須宣告最小必要的 `permissions:`，包括 `id-token: write`。
 
-- 設定順序：先準備具有最小 Azure RBAC 的 Azure workload identity，再建立 GitHub OIDC federated credential，接著在對應 GitHub Environment 設定 workflow 所需的非敏感識別值／secret，最後以實際 workflow 觸發條件測試 `azure/login` 與其後的 Azure 動作（class repo 為 `az vm run-command`；`MoneyYu/GH-200` 的 `demo-java-07-deploy-webapp` 為 Azure Linux App Service 部署，`04`-`06` 完全不使用 OIDC，改用 SSH）。
-- 建立 credential 時，以 class repo 和 `test`／`production` 的實際部署條件為準；不要複製另一個 repo、branch 或 environment 的 subject。
+- 設定順序：先準備具有最小 Azure RBAC 的 Azure workload identity，再建立 GitHub OIDC federated credential，接著在對應 GitHub Environment 設定 workflow 所需的非敏感識別值／secret，最後以實際 workflow 觸發條件測試 `azure/login` 與其後的 Azure 動作。**現行對齊後**，`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 的 `07.deploy-webapp`／`demo-java-07-deploy-webapp` 都部署到 Azure Linux App Service，兩者都不涉及 `az vm run-command`；`az vm run-command` 只出現在 class repo **pre-refactor**（重構前）的歷史 run（見上方「2026-09-03 班級 repo 已部署環境」表），不是目前的 `07`。兩個 repo 的 `04`-`06` 都完全不使用 OIDC，改用 SSH。
+- 建立 credential 時，以「該 repo」和 `test`／`production` 的實際部署條件為準；`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 是兩個獨立 repo，**各自需要專屬的 federated credential**，不要複製另一個 repo、branch 或 environment 的 subject（詳見下方「Azure RBAC for the 07 OIDC identity」）。
 - 不把 Azure client secret 寫入 workflow 或交給學員。
 - Azure RBAC 只授與部署所需的最小權限。
 - 所需的 subscription ID、tenant ID、client ID、federated credential subject 和 Environment secrets/variables 只存在講師已核對的設定，本文不記載其值。
@@ -106,11 +117,66 @@ OIDC 建立 GitHub Actions 與 **Azure** 的 workload identity federation；它�
   格式。若出現 `AADSTS700213`，以 workflow log 顯示的 presented assertion subject
   為準更新 federated credential，不要假設傳統的純 `owner/repo` 格式。
 - 共享 subscription 可能由外部排程 deallocate VM。使用 Run Command 的 class repo
-  workflows 已在 Run Command 前執行 `az vm start`；`MoneyYu/GH-200` 的 SSH-only
+  **pre-refactor** workflows（重構前的歷史版本）已在 Run Command 前執行 `az vm start`；
+  現行對齊後的兩個 repo 都不再有任何 Run Command workflow。`MoneyYu/GH-200` 的 SSH-only
   `04`/`05`/`06` **沒有** Azure CLI 登入步驟，也不會自動啟動 VM——VM 電源狀態或
   TCP/22 未就緒時，SSH 連線步驟會快速失敗並提示「請確認 VM 已啟動」。**必須由講師
   在課前用 Azure CLI 啟動該 VM**，workflow 本身不會、也不應該負責開機。若看到
   `OperationNotAllowed` 要先查 power state，不要重跑 Terraform。
+
+### Azure RBAC for the `07` OIDC identity（每個 repo 各自一組，不共用）
+
+`07.deploy-webapp`／`demo-java-07-deploy-webapp` 只部署到 Linux App Service，不觸碰 VM
+或 Blob，因此只需要 Azure 內建角色 **Website Contributor**，且範圍應精準指定到那個
+Linux Web App 資源本身（例如 `gh200-java-web-0903-ksh`），不是整個 resource group，也
+不是 subscription；`Website Contributor` 本來就能在資源層級指派，不需要更寬的範圍。
+
+`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 是兩個獨立 repo，**各自需要一組專屬的
+federated credential／Azure identity**：
+
+- 每個 repo 的 federated credential subject 都必須對應「那個 repo 自己」實際觸發 `07`
+  的條件（通常是該 repo 的 `test` Environment）；上方已說明本場採 organization/repository
+  **stable ID** 格式，實際 subject 一律以該 repo 的 workflow log 顯示的 presented
+  assertion subject 為準，不要假設傳統 `owner/repo` 格式，也不要把一個 repo 核對過的
+  subject 原樣套用到另一個 repo。
+- **不要沿用 SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity 或其角色指派。**
+  那組身分是為了 Run Command（VM 存取）與 Blob artifact transport（Blob 存取）設計的，
+  範圍與資料類型都與現在 `07` 需要的「只管理一個 Web App」不同；繼續共用等於讓兩個
+  repo 的部署身分持有超出實際需要的 VM／Blob 權限，違反最小權限，也讓兩個 repo 的
+  Azure 存取邊界糾纏在一起。
+
+### Terraform outputs → GitHub variables（兩個 repo 都要各設一次）
+
+`terraform apply` 完成後，用 Terraform **非機密** outputs（不含任何私鑰或 host key）
+分別設定 `MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo 各自的 repository
+variable；兩個 repo 各有自己的 Environments 與部署身分，因此要各設一次，不是共用一份：
+
+```powershell
+cd TERRAFORM
+$vmIp       = terraform output -raw linux_vm_public_ip
+$webAppName = terraform output -raw web_app_name
+$webAppUrl  = terraform output -raw web_app_url
+$webAppHost = $webAppUrl -replace '^https://', ''
+
+foreach ($repo in @('MoneyYu/GH-200', 'MoneyDemo/20260903-GH200')) {
+  gh variable set VM_PUBLIC_IP --body $vmIp --repo $repo
+  gh variable set VM_SSH_USER --body azureuser --repo $repo
+  gh variable set AZURE_WEB_APP_NAME --body $webAppName --repo $repo
+  gh variable set AZURE_WEB_APP_HOSTNAME --body $webAppHost --repo $repo
+}
+```
+
+`VM_SSH_HOST_KEY` **不**適合用上面這種批次迴圈：它必須先在受信任管道（例如 Azure
+serial console，或已用其他方式確認身分的初次連線）擷取完整 OpenSSH `known_hosts` 行並
+人工核對，才逐一設到兩個 repo；下列指令只示範「怎麼設」，`$knownHostsPath` 內容本身
+不在本文出現，也不要把它印到終端機或 log：
+
+```powershell
+Get-Content -Raw -LiteralPath $knownHostsPath |
+  gh variable set VM_SSH_HOST_KEY --repo MoneyYu/GH-200
+Get-Content -Raw -LiteralPath $knownHostsPath |
+  gh variable set VM_SSH_HOST_KEY --repo MoneyDemo/20260903-GH200
+```
 
 官方參考：
 
@@ -138,7 +204,8 @@ OIDC 建立 GitHub Actions 與 **Azure** 的 workload identity federation；它�
 - [ ] `01.build`…`06.full-pipeline` 至少有一組可展示的 run；`09.troubleshooting` 有可讀的失敗案例。
 - [ ] 若示範 VM self-hosted runner，runner 已在 GitHub UI 顯示可用，registration token 僅在註冊當下取得；registration 需要講師以受信任的手動連線／session 完成，且 runner 應用程式須每 30 天內更新一次，否則 GitHub 不會再派工作給它。
 - [ ] 課前用 Azure CLI 確認並啟動（若已 deallocate）SSH 部署目標 VM；`04`/`05`/`06` 的 workflow 完全不含 Azure 登入，也不會自行啟動 VM，VM 未開機或 TCP/22 未開放時 SSH 連線步驟會快速失敗。
-- [ ] `VM_SSH_PRIVATE_KEY`（secret）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、`VM_SSH_HOST_KEY`（variables）已設定；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts` 行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入，VM host key 輪替後需手動更新。
+- [ ] `VM_SSH_PRIVATE_KEY`（secret）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、`VM_SSH_HOST_KEY`（variables）已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo** 各自設定（見上方「Terraform outputs → GitHub variables」）；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts` 行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入，VM host key 輪替後需手動更新。
+- [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`（variables）已從 Terraform outputs（`web_app_name`、`web_app_url`）在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp` 專屬的 OIDC identity 已依上方「Azure RBAC for the 07 OIDC identity」在兩個 repo 各自建立，且範圍是精準的該 Linux Web App（`Website Contributor`），未沿用舊有的 VM／Blob 共用 identity。
 
 Self-hosted runner 不得接收不信任 fork pull request。它保留機器狀態，維護、修補、清理與安全隔離均由講師／管理者負責；runner group 應限縮可使用的 repository。
 
@@ -197,7 +264,10 @@ Terraform 不會建立 GitHub repository、workflow、Environment、secret、pac
 
 以下為講師待執行檢查；未勾選即未驗證。
 
-### Java pipeline
+### Java pipeline（pre-refactor 歷史紀錄）
+
+> 見上方「2026-09-03 班級 repo 已部署環境（pre-refactor 歷史紀錄）」表；下列勾選只證明
+> 該次交付當時的舊拓樸曾經成功，**不是**目前 SSH-only 對齊版本的驗證。
 
 - [x] `01.build` 使用 Maven Wrapper 成功。
 - [x] `02.build-test` 的 tests 成功，另有 `09.troubleshooting` 的可讀失敗 log。
@@ -208,10 +278,16 @@ Terraform 不會建立 GitHub repository、workflow、Environment、secret、pac
 
 ### Identity and VM
 
-- [x] Azure OIDC federated credential、least-privilege Azure RBAC、
-  `permissions: id-token: write` 已用 class repo 實際測通（class repo 走
-  `az vm run-command`；`MoneyYu/GH-200` 的 `07.deploy-webapp` 走 Linux App Service，
-  兩者都不涉及 VM 的 SSH 部署）。
+- [x] **Pre-refactor 歷史紀錄**：Azure OIDC federated credential、least-privilege
+  Azure RBAC、`permissions: id-token: write` 曾用 class repo **當時**的 `04`（走
+  `az vm run-command`）實際測通。這只證明 OIDC 機制本身在該次交付曾經成功，**不是**
+  對目前已對齊的 `07.deploy-webapp`（Linux App Service，`MoneyYu/GH-200` 與
+  `MoneyDemo/20260903-GH200` 現行都是這個編號）的驗證。
+- [ ] **尚待課前驗證**：兩個 repo 現行對齊版本的 `07.deploy-webapp`（Linux App
+  Service／OIDC 對照）尚未有 live workflow dispatch 證據；目前只完成程式碼靜態驗證
+  （YAML parse／`bash -n`）。課前須各自用該 repo 專屬的 OIDC identity（見下方 Azure
+  RBAC 小節）實際 dispatch 一次，確認 `azure/login` 與 `azure/webapps-deploy` 成功，
+  並用 `/api/info` 的 build SHA 做語意化 smoke test。
 - [ ] **尚待課前驗證**：`MoneyYu/GH-200` 的 SSH-only `04`/`05`/`06`
   尚未有 live workflow dispatch 證據；目前只完成程式碼與 Terraform 的靜態驗證
   （lint／`bash -n`／`terraform validate`／`plan`），未實際觸發 workflow 或執行

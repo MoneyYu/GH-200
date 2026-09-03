@@ -81,22 +81,25 @@
 class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供的場次設計，它包含 Java Spring Boot 4.1.1、Java 21、Maven 應用程式與 Maven Wrapper，產出 `target/simpleweb.jar`；學員無須安裝 Maven。用 `/`、`/api/info`、`/actuator/health` 檢查服務，其中首頁的 environment、build SHA 與 hostname 可視覺驗證部署目標。
 
 **兩個 repo 的角色不同，此處先釐清一次，避免與下表混淆：** class repo 是學員 fork
-使用的 fill-in-the-blank lab 來源，也是本場歷史 run 的證據（見「2026-09-03 班級 repo
-已部署環境」表）；它自己的 `04`/`07` 等 workflow 編號屬於該次交付當時的獨立設計（例如
-`04` 走 OIDC + `az vm run-command`、`07.deploy-ssh` 才是它的 SSH 風險對照），這是已發生
-的歷史事實，本文不重寫。**下表描述的 SSH-only 主線與 `07` OIDC 對照，是
-`MoneyYu/GH-200` 目前維護的 self-contained workflow 版本**（`demo-java-04` 至
-`demo-java-07`），與 class repo 的原始設計不同、也不互相替代；課堂這一段 demo 只使用
-`MoneyYu/GH-200` 的 workflows。
+使用的 fill-in-the-blank lab 來源，也是本場 pre-refactor 歷史 run 的證據來源（見
+「2026-09-03 班級 repo 已部署環境（pre-refactor 歷史紀錄）」表）；那次交付當時，它自己
+的 `04`/`07` 走的是獨立設計（`04` 是 OIDC + `az vm run-command`、`07.deploy-ssh` 才是它
+的 SSH 風險對照），這是已發生的歷史事實，本文不重寫。**class repo 後續已完成 SSH-only
+對齊工作**，把自己的 `04`-`06`／`07`／`08` 編號改成與 `MoneyYu/GH-200` 相同的
+SSH-only／OIDC-webapp（`07.deploy-webapp`）／same-VM-runner 主線設計；**下表描述的
+SSH-only 主線與 `07` OIDC 對照，現在是兩個 repo 共同的現行主線**，只是各自維護獨立的
+workflow 檔案、GitHub 設定與部署身分（`demo-java-04` 至 `demo-java-07` 對
+`04.deploy-test` 至 `07.deploy-webapp`），且**尚未有該對齊後版本的 live workflow run
+證據**（目前只完成靜態驗證）；課堂這一段 demo 只使用 `MoneyYu/GH-200` 的 workflows。
 
-| 項目 | 課堂呈現（`MoneyYu/GH-200`） |
+| 項目 | 課堂呈現（`MoneyYu/GH-200`；class repo 現行對齊後的編號相同，但獨立維護） |
 |---|---|
 | Azure Ubuntu 24.04 Linux VM | 同一台 VM 承載兩個 systemd services：`simpleweb-test` 在 `8080`，`simpleweb-prod` 在 `8081`；VM 同時模擬 on-prem application server。 |
 | GitHub Environments | `test` 與 `production`；`production` 有 required-reviewer approval gate。 |
-| 主線部署（`MoneyYu/GH-200` 的 04-06） | SSH-only：Build → Test → Package → SCP → SSH → `systemctl` → 語意化 `/api/info` SHA smoke test（M5）。強調需要開放 inbound TCP/22 並在 GitHub 保存長期 private key，主機指紋釘選在 `VM_SSH_HOST_KEY`，不使用動態 `ssh-keyscan`。 |
-| OIDC/PaaS 對照（僅 `MoneyYu/GH-200` 的 07） | `07.deploy-webapp`：Azure OIDC 部署到 Linux App Service，強調短期 token、`permissions: id-token: write` 與精準 federated credential，不需要開放連接埠或保存長期 private key，因此不是主線的 VM 部署路徑。 |
-| Self-hosted runner 對照（`MoneyYu/GH-200` 的 08） | `08.selfhosted-runner`（M4）：runner 與 SSH 部署目標同一台 VM，是課堂簡化；適合說明網路可達性、runner group、殘留狀態與不信任 PR 的風險，這條路徑本身不需要 inbound SSH。 |
-| 漸進 workflow（`MoneyYu/GH-200`） | `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`；`09.troubleshooting` 用於讀 log。 |
+| 主線部署（04-06） | SSH-only：Build → Test → Package → SCP → SSH → `systemctl` → 語意化 `/api/info` SHA smoke test（M5）。強調需要開放 inbound TCP/22 並在 GitHub 保存長期 private key，主機指紋釘選在 `VM_SSH_HOST_KEY`，不使用動態 `ssh-keyscan`。 |
+| OIDC/PaaS 對照（07） | `07.deploy-webapp`：Azure OIDC 部署到 Linux App Service，強調短期 token、`permissions: id-token: write` 與精準 federated credential，不需要開放連接埠或保存長期 private key，因此不是主線的 VM 部署路徑；兩個 repo 各自使用專屬的 OIDC identity（`Website Contributor`，範圍限定該 Web App），不共用。 |
+| Self-hosted runner 對照（08） | `08.selfhosted-runner`（M4）：runner 與 SSH 部署目標同一台 VM，是課堂簡化；適合說明網路可達性、runner group、殘留狀態與不信任 PR 的風險，這條路徑本身不需要 inbound SSH。 |
+| 漸進 workflow | `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`；`09.troubleshooting` 用於讀 log。 |
 
 **live deploy 中途失敗：** 先判斷是 YAML/workflow、SSH 連線、SCP、systemd service 或應用程式 health 的哪一層（`07.deploy-webapp` 則是 YAML/workflow、OIDC、Web App deploy 或 health）；用失敗 run 的 job/step/log 示範診斷。三分鐘內未能定位時，切至已完成 run 與兩個健康端點的備援畫面，保留錯誤 run 作為 M2 討論素材。不要關閉 production gate、印出 secret 或在課堂上修 Terraform。
 
@@ -280,9 +283,19 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 - [ ] `VM_SSH_PRIVATE_KEY` 必須是 repository secret，**或**在 `test` 與 `production`
   兩個 Environment 各自重複設定一份（`04`/`05`/`06` 都會用到，兩種設定擇一但須一致）；
   同時確認 repository variable `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser` 與
-  `VM_SSH_HOST_KEY` 已設定。`VM_SSH_HOST_KEY` 必須是完整 OpenSSH `known_hosts`
+  `VM_SSH_HOST_KEY` 已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo**
+  各自設定（`terraform apply` 後如何從 outputs 帶出這些值並分別設到兩個 repo，見
+  [Trainer demo environment guide](demo-environment.md) 的「Terraform outputs → GitHub
+  variables」）。`VM_SSH_HOST_KEY` 必須是完整 OpenSSH `known_hosts`
   行，**不是** `SHA256:` 指紋，且是在受信任網路下取得並人工核對後手動貼入。
-- [ ] Azure OIDC federated credential、最小 Azure RBAC 與 workflow `permissions: id-token: write` 的組合已用於 `07.deploy-webapp`（Linux App Service）；確認 subject 對應 repo 與 Environment。
+- [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`（variables，來自 Terraform outputs
+  `web_app_name`／`web_app_url`）已在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp`
+  各自使用**專屬**的 Azure OIDC federated credential、`Website Contributor`（範圍精準指定
+  該 Linux Web App，不是 resource group 或 subscription）與 workflow
+  `permissions: id-token: write`，subject 對應「該 repo 自己」的 repo 與 Environment；
+  **不沿用** SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity（詳見
+  [Trainer demo environment guide](demo-environment.md) 的「Azure RBAC for the 07 OIDC
+  identity」）。
 - [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照各有可展示的成功結果與 fallback 截圖；目前尚無 live workflow dispatch 證據，需課前實際 dispatch 驗證。
 - [ ] `TERRAFORM/` 現行 stack 沒有 Windows VM 或 Windows Web App；若未來另有 C# demo 需求，需另行規劃基礎設施，不要把 Java jar 部署到 Linux Java Web App 以外的目標。
 

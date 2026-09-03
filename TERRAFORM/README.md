@@ -184,12 +184,33 @@ deployment 可用 `sudo install` / `sudo mv` 將檔案放入 `/opt/simpleweb`，
 service。這是 `04`/`05`/`06` 目前實際採用的路徑；jar 與 `app.env` 最後都應將
 ownership 設為 `simpleweb:simpleweb`。
 
+### OS disk storage type
+
+既有 Linux VM 的 OS disk（`lab-linux-osdisk-0903-ksh`）在 Azure 上實際是 `Standard_LRS`。
+`os_disk.storage_account_type` 因此維持 `Standard_LRS`，而不是改成 `Premium_LRS`：兩者不
+一致會讓 `storage_account_type` 觸發 `forces replacement`，導致下一次 `plan`／`apply` 把
+既有 `azurerm_linux_virtual_machine.lab` 整台重建——不只違反「保留既有 Linux VM」的需求，
+重建還會繞過 `admin_ssh_key`／`custom_data` 的 `lifecycle.ignore_changes`（那只在原地更新時
+生效，資源被整個換掉時不適用），等於用一次意外的 replace 蓋掉課前已完成的 out-of-band SSH
+金鑰輪替。維持 `Standard_LRS` 才能讓 `terraform plan` 對這台既有 VM 保持 clean（no changes/
+no replacement），也符合共享 subscription policy 對既有 disk 的實際狀態。這裡刻意只改這一
+個欄位，不對 `os_disk` 加上整體的 `ignore_changes`——後者會連未來刻意的欄位變更都靜默吃掉，
+掩蓋而非解決這個落差。
+
 ### Post-apply verification
 
 `terraform apply` 完成只代表 Azure VM control plane provisioning 已完成；第一次開機的
 cloud-init（包含 OpenJDK 21 安裝與 systemd units 建立）可能仍在背景執行。**先等待
 cloud-init 完成，再檢查 Java 與 services**，避免把正常的初始收斂誤判為部署失敗。驗證改用
 trainer 自己的 SSH private key 連線，**不要**印出 private key 內容或把它寫進任何 log。
+
+> [!IMPORTANT]
+> `lab-linux-nsg-0903-ksh` 只允許來源 `AzureCloud` 連入 TCP/22（`AllowSshFromAzureCloud`）；
+> 一般講師筆電所在的網路**不在** `AzureCloud` 這個 service tag 內，直接從筆電 SSH 會被
+> NSG 擋下。下列 post-apply 驗證、以及「Notes and known limitations」的 runner registration
+> 手動連線，都必須從 **Azure Cloud Shell** 或其他已被 NSG 明確允許的受信任網路執行，而不是
+> 一般筆電。**不要**為了讓筆電能連而放寬 NSG（開放 `Internet` 來源或新增臨時規則）；也不要
+> 走 Azure Run Command 或 Arc 之類的替代連線路徑——本 stack 刻意不採用那些機制。
 
 主機指紋**不使用** `StrictHostKeyChecking=accept-new`，也不使用 `ssh-keyscan` 或任何
 per-run TOFU（trust-on-first-use）；一律使用已釘選在 repository variable
@@ -232,7 +253,8 @@ services 為 `enabled`。在第一個 jar 部署前，services 顯示 `inactive`
 - VM extension 只會把 runner binary 預先下載並解壓縮到 `/opt/actions-runner`；**註冊
   runner 仍需要一次短效 registration token，且必須由講師以受信任的手動連線／session**
   （例如 SSH 到該 VM）完成 `config.sh` 與啟動 runner service，Terraform 不會、也不能
-  自動化這一步。請參考
+  自動化這一步。這次 SSH 連線同樣只允許來源 `AzureCloud`，**必須從 Azure Cloud Shell 或
+  其他已被 NSG 明確允許的受信任網路**執行，一般講師筆電無法直接連線；請參考
   [Adding self-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners)。
 - `linux_ssh_public_key` 只用於**建立新 VM**時設定 admin SSH public key；既有 VM 的
   `admin_ssh_key` 已被 `ignore_changes` 忽略，讓講師可在 Terraform 之外做受控的金鑰輪替，

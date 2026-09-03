@@ -33,20 +33,36 @@ behavioral — this is not a place for narrative history.
 - The class repo is `MoneyDemo/20260903-GH200`. It contains a Java 21 / Spring Boot 4.1.1 demo,
   progressive workflows `01`–`09`, and fill-in-the-blank student labs. CI labs run in student
   forks; CD labs are trainer-run by default because each fork needs its own exact OIDC federated
-  credential and RBAC.
+  credential and RBAC. **Both repos' active workflows use the same SSH-only VM deployment
+  design**: `04`-`06` SSH-only to the Linux VM, `07` (`07.deploy-webapp` /
+  `demo-java-07-deploy-webapp`) the Azure OIDC/PaaS contrast to the Linux Web App, `08` the
+  same-VM self-hosted runner contrast. The class repo's earlier runs that used Azure OIDC +
+  `az vm run-command` for its own `04` (with a separate `07.deploy-ssh` as the SSH contrast) are
+  **pre-refactor historical evidence only** — do not treat them as the current class-repo design,
+  and do not claim those historical runs used SSH. Nothing in either repo's active workflows uses
+  Azure Run Command or Azure Arc; do not reintroduce that as an active path.
 - The deployed Java target is `lab-linux-0903-ksh` in `GH200-0903`: test on port `8080`,
   production on `8081`. Production uses a GitHub Environment required-reviewer gate. The same
   Linux VM is also the SSH-only deployment target for `MoneyYu/GH-200`'s `demo-java-04`-`06` and
   hosts the same-VM self-hosted runner demo (`08`), as a classroom simplification.
 - The shared Azure subscription enforces policy after deployment: Public IP resources receive a
   `FirstPartyUsage` tag, Windows OS disks use `Standard_LRS`, Web App basic publishing auth stays
-  disabled, and persistent Internet-sourced SSH rules are removed. Terraform deliberately
+  disabled, and persistent Internet-sourced SSH rules are removed. **The Linux VM's OS disk also
+  uses `Standard_LRS`** — that is what the live disk (`lab-linux-osdisk-0903-ksh`) actually is, so
+  `os_disk.storage_account_type` in `MOD.tf` must stay `Standard_LRS`; setting it to `Premium_LRS`
+  makes Terraform force-replace `azurerm_linux_virtual_machine.lab` (destroy and recreate the
+  existing VM), which both violates "preserve the existing Linux VM" and bypasses the
+  `admin_ssh_key`/`custom_data` `lifecycle.ignore_changes` (those only apply to in-place updates,
+  not to a full replace). Terraform deliberately
   matches/ignores those policy-owned values so post-deploy `terraform plan` is clean. The active
   Java deployment path (`04`-`06`) is SSH-only to the Linux VM and relies on the
   Terraform-managed `AllowSshFromAzureCloud` rule (source `AzureCloud`, not `Internet`) staying in
   place; if the shared subscription's policy scan removes it, the trainer/user restores the same
   `AllowSshFromAzureCloud` rule manually — never broaden it to `Internet` and never add a
-  temporary Internet-facing SSH rule.
+  temporary Internet-facing SSH rule. Because the NSG only allows source `AzureCloud`, any
+  trainer-run SSH or runner-registration command against this VM must come from Azure Cloud Shell
+  or another network the NSG explicitly allows — a normal trainer laptop is not covered by that
+  rule.
 
 ## Labs: there is no lab repo
 

@@ -75,7 +75,7 @@ Open the [student lab index](https://github.com/MoneyDemo/20260903-GH200/blob/ma
 and complete `lab01-first-workflow.md` through `lab06-troubleshooting.md`;
 `lab07-selfhosted-runner.md` is optional.
 
-Follow the progressive workflows in the class repository's own `.github/workflows`: `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`. Use `07.deploy-ssh`, `08.selfhosted-runner`, and `09.troubleshooting` as instructor-led contrasts and troubleshooting material.
+Follow the progressive workflows in the class repository's own `.github/workflows`: `01.build` → `02.build-test` → `03.package-artifact` → `04.deploy-test` → `05.deploy-prod` → `06.full-pipeline`. Use `07.deploy-webapp` (Azure OIDC/PaaS contrast to a Linux App Service), `08.selfhosted-runner` (same-VM self-hosted runner), and `09.troubleshooting` as instructor-led contrasts and troubleshooting material.
 
 ## Course Info
 ![Course overview](https://mdcontent.yu.money/contents/f008fce23003844339a3ac100.zh-TW.png)
