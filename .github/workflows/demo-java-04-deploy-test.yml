@@ -22,20 +22,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      # 原 release tag: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           persist-credentials: false
 
-      - uses: actions/setup-java@v6
+      # 原 release tag: actions/setup-java@v6
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
           java-version: '21'
 
+      # build 時把完整 commit SHA 與 UTC 時間烤進 artifact，之後由 /api/info 佐證
       - name: Build and test
-        run: ./mvnw -B verify
+        run: ./mvnw -B verify -Dapp.build.sha="$GITHUB_SHA" -Dapp.build.time="$(date -u +%FT%TZ)"
 
       - name: Upload deployable jar
-        uses: actions/upload-artifact@v7
+        # 原 release tag: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: simpleweb-jar
           path: target/simpleweb.jar
@@ -50,7 +54,8 @@ jobs:
       url: http://${{ vars.VM_PUBLIC_IP }}:8080
 
     steps:
-      - uses: actions/download-artifact@v7
+      # 原 release tag: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: simpleweb-jar
           path: ./dist
@@ -139,7 +144,6 @@ jobs:
           KNOWN_HOSTS: ${{ steps.ssh.outputs.known_hosts }}
           VM_USER: ${{ vars.VM_SSH_USER }}
           VM_HOST: ${{ vars.VM_PUBLIC_IP }}
-          EXPECTED_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           ssh_opts=(
@@ -150,21 +154,16 @@ jobs:
             -o StrictHostKeyChecking=yes
             -o UserKnownHostsFile="$KNOWN_HOSTS"
           )
-          ssh "${ssh_opts[@]}" -- "$VM_USER@$VM_HOST" bash -s -- "$REMOTE_JAR" "/opt/simpleweb/test/simpleweb.jar" "simpleweb-test" "$EXPECTED_SHA" <<'REMOTE_SCRIPT'
+          ssh "${ssh_opts[@]}" -- "$VM_USER@$VM_HOST" bash -s -- "$REMOTE_JAR" "/opt/simpleweb/test/simpleweb.jar" "simpleweb-test" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staged_jar="$1"
           target_jar="$2"
           service_name="$3"
-          expected_sha="$4"
-          env_file="$(mktemp)"
           cleanup() {
             rm -f -- "$HOME/$staged_jar"
-            rm -f -- "$env_file"
           }
           trap cleanup EXIT
           sudo install -o simpleweb -g simpleweb -m 0644 "$HOME/$staged_jar" "$target_jar"
-          printf 'APP_BUILD_SHA=%s\nAPP_BUILD_TIME=%s\n' "$expected_sha" "$(date -u +%FT%TZ)" > "$env_file"
-          sudo install -o simpleweb -g simpleweb -m 0644 "$env_file" "$(dirname "$target_jar")/app.env"
           sudo systemctl restart "$service_name"
           sleep 5
           sudo systemctl is-active "$service_name"

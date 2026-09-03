@@ -169,7 +169,7 @@ Windows 目標。
 | Ubuntu 24.04 VM | `lab-linux-<group_postfix>-ksh` | `04`-`06` SSH 部署 target；`08` self-hosted runner 對照主機。 |
 | Linux Custom Script extension | `lab-linux-runner-<group_postfix>-ksh` | 預先下載/解壓縮 runner binary，不含 registration token。 |
 | Linux App Service plan（`S1`） | `lab-app-plan-<group_postfix>-ksh` | Linux Java Web App plan。 |
-| Linux Java Web App（Java SE 21） | `gh200-web-<group_postfix>-ksh` | `07.deploy-webapp` 的 Azure OIDC/PaaS 對照 target。 |
+| Linux Java Web App（Java SE 21） | `gh200-java-web-<group_postfix>-ksh` | `07.deploy-webapp` 的 Azure OIDC/PaaS 對照 target。 |
 
 既有 stack 的 region 為 `japaneast`。`group_postfix` 為 1–10 個小寫英數字；Linux VM 的
 admin user 為 `azureuser`，只用 SSH public key 認證（`linux_ssh_public_key` 變數），

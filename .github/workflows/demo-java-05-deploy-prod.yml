@@ -169,7 +169,6 @@ jobs:
           KNOWN_HOSTS: ${{ steps.ssh.outputs.known_hosts }}
           VM_USER: ${{ vars.VM_SSH_USER }}
           VM_HOST: ${{ vars.VM_PUBLIC_IP }}
-          EXPECTED_SHA: ${{ inputs.build_sha }}
         run: |
           set -euo pipefail
           ssh_opts=(
@@ -180,21 +179,16 @@ jobs:
             -o StrictHostKeyChecking=yes
             -o UserKnownHostsFile="$KNOWN_HOSTS"
           )
-          ssh "${ssh_opts[@]}" -- "$VM_USER@$VM_HOST" bash -s -- "$REMOTE_JAR" "/opt/simpleweb/prod/simpleweb.jar" "simpleweb-prod" "$EXPECTED_SHA" <<'REMOTE_SCRIPT'
+          ssh "${ssh_opts[@]}" -- "$VM_USER@$VM_HOST" bash -s -- "$REMOTE_JAR" "/opt/simpleweb/prod/simpleweb.jar" "simpleweb-prod" <<'REMOTE_SCRIPT'
           set -euo pipefail
           staged_jar="$1"
           target_jar="$2"
           service_name="$3"
-          expected_sha="$4"
-          env_file="$(mktemp)"
           cleanup() {
             rm -f -- "$HOME/$staged_jar"
-            rm -f -- "$env_file"
           }
           trap cleanup EXIT
           sudo install -o simpleweb -g simpleweb -m 0644 "$HOME/$staged_jar" "$target_jar"
-          printf 'APP_BUILD_SHA=%s\nAPP_BUILD_TIME=%s\n' "$expected_sha" "$(date -u +%FT%TZ)" > "$env_file"
-          sudo install -o simpleweb -g simpleweb -m 0644 "$env_file" "$(dirname "$target_jar")/app.env"
           sudo systemctl restart "$service_name"
           sleep 5
           sudo systemctl is-active "$service_name"

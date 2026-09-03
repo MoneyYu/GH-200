@@ -158,7 +158,7 @@ Remove-Item Env:\TF_VAR_linux_ssh_public_key
 - Linux network interface：`lab-linux-nic-0903-ksh`
 - Linux Network Security Group：`lab-linux-nsg-0903-ksh`
 - App Service plan：`lab-app-plan-0903-ksh`
-- Linux Java Web App：`gh200-web-0903-ksh`
+- Linux Java Web App：`gh200-java-web-0903-ksh`
 
 ## Java VM deployment layout
 
@@ -170,9 +170,12 @@ deployment directories 與 systemd services：
 | Test | `/opt/simpleweb/test/simpleweb.jar` | `/opt/simpleweb/test/app.env` | `simpleweb-test.service` | `8080` |
 | Production | `/opt/simpleweb/prod/simpleweb.jar` | `/opt/simpleweb/prod/app.env` | `simpleweb-prod.service` | `8081` |
 
-`app.env` 是 optional，可由 deployment workflow 寫入 `APP_BUILD_SHA` 與
-`APP_BUILD_TIME`。Cloud-init 只執行 `systemctl enable`，不會在 jar 尚未部署時啟動
-services；workflow 應在放置 jar 與 environment file 後執行
+`app.env` 是 optional 的 `EnvironmentFile=-`（缺檔也能啟動）。build provenance（完整
+commit SHA 與 UTC build 時間）現在於 build 階段由 Maven resource filtering 烤進 jar，
+deployment workflow **不再**寫入 `APP_BUILD_SHA`／`APP_BUILD_TIME`；版本佐證一律來自
+`/api/info`（artifact 本身），不靠外部設定。`APP_ENVIRONMENT` 仍由 systemd unit 的
+`Environment=` 指令提供。Cloud-init 只執行 `systemctl enable`，不會在 jar 尚未部署時啟動
+services；workflow 應在放置 jar 後執行
 `sudo systemctl restart simpleweb-test.service` 或
 `sudo systemctl restart simpleweb-prod.service`。
 
@@ -235,6 +238,11 @@ services 為 `enabled`。在第一個 jar 部署前，services 顯示 `inactive`
   `admin_ssh_key` 已被 `ignore_changes` 忽略，讓講師可在 Terraform 之外做受控的金鑰輪替，
   而不會被下一次 `plan`/`apply` 覆蓋或觸發重建。SSH private key 永遠不會回到 Terraform
   state。
+  - **本次交付的金鑰輪替證據（trainer-only）**：既有 VM 的 SSH 金鑰已在 apply **之前**於
+    Terraform 之外（out-of-band）完成輪替——直接在 VM 上以新的 public key 取代舊的
+    `authorized_keys`、用替換後的金鑰實際連線測試通過、並撤銷（revoke）舊金鑰的存取。此
+    輪替**不是**由 Terraform 執行；`linux_ssh_public_key` 僅在日後**建立新 VM**時作為 seed，
+    不會回寫或輪替既有 VM 的金鑰。本文件不重新產生也不揭露任何金鑰內容。
 - Terraform 會忽略既有 Linux VM 的 `custom_data`，因此後續 cloud-init 變更不會自動套用；若要更新，請透過 SSH/手動方式調整，或刻意重建 VM 讓新設定生效。
 - Linux Web App 使用 Java SE 21。部署前應確認課程 sample application 與 Azure App
   Service Java runtime support。

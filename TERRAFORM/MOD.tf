@@ -20,10 +20,11 @@ resource "azurerm_service_plan" "lab" {
 }
 
 resource "azurerm_linux_web_app" "lab" {
-  name                                           = "gh200-web-${local.resource_suffix}"
+  name                                           = "gh200-java-web-${local.resource_suffix}"
   location                                       = azurerm_resource_group.rg.location
   resource_group_name                            = azurerm_resource_group.rg.name
   service_plan_id                                = azurerm_service_plan.lab.id
+  https_only                                     = true
   ftp_publish_basic_authentication_enabled       = false
   webdeploy_publish_basic_authentication_enabled = false
 
@@ -188,10 +189,12 @@ resource "azurerm_virtual_machine_extension" "linux_runner" {
       RUNNER_DIR="/opt/actions-runner"
       RUNNER_ARCHIVE="actions-runner-linux-x64-$RUNNER_VERSION.tar.gz"
       RUNNER_URL="https://github.com/actions/runner/releases/download/v$RUNNER_VERSION/$RUNNER_ARCHIVE"
+      RUNNER_SHA256="70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613"
       install -d -m 0755 "$RUNNER_DIR"
       cd "$RUNNER_DIR"
       if [ ! -f ".runner-version-$RUNNER_VERSION" ]; then
         curl -fsSL -o "$RUNNER_ARCHIVE" "$RUNNER_URL"
+        echo "$RUNNER_SHA256  $RUNNER_ARCHIVE" | sha256sum -c -
         tar -xzf "$RUNNER_ARCHIVE"
         rm -f "$RUNNER_ARCHIVE"
         touch ".runner-version-$RUNNER_VERSION"
