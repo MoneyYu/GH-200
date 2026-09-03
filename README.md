@@ -37,6 +37,10 @@ Environments. Its full deployment workflow is therefore manual and requires the
 `confirm_production=deploy` input. Use the class repository above when demonstrating the real
 required-reviewer approval gate.
 
+Because GH-200 is private, its deployment workflows do not expose GitHub release assets. OIDC
+uploads each commit's jar and SHA-256 digest to the private `deployments` Azure Blob container;
+the VM downloads them with its system-assigned managed identity.
+
 ## Infos
 [Learner Experience Portal](https://esi.microsoft.com/)
 [ESI Support](https://aka.ms/esisupport)

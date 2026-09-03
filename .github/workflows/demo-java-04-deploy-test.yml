@@ -8,23 +8,20 @@
 #   - az vm run-command：不用開 SSH port、不用存私鑰，就能在 VM 上執行指令
 #
 # 部署載荷怎麼上 VM？
-#   本 repo 是 public，所以把 jar 發佈成 GitHub Release asset，
-#   VM 端用 curl 匿名下載即可，不需要額外的儲存體或憑證。
+#   GH-200 是 private repo，所以不能匿名下載 GitHub Release asset。
+#   Workflow 用 OIDC 上傳到 private Azure Blob；VM 用 system-assigned identity 下載。
 name: demo-java-04-deploy-test
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write # 發佈 release asset 需要寫入權限
+  contents: read
   id-token: write # OIDC 換發 token 必要！
 
 concurrency:
   group: simpleweb-deploy
   cancel-in-progress: false
-
-env:
-  RELEASE_TAG: build-${{ github.sha }}
 
 jobs:
   deploy-test:
@@ -45,18 +42,6 @@ jobs:
       - name: Build and test
         run: ./mvnw -B verify
 
-      # 把 jar 發佈成一個「滾動式」的 pre-release，讓 VM 可以直接下載
-      - name: Publish deployable
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          printf '%s\n' "$GITHUB_SHA" > build-sha.txt
-          sha256sum target/simpleweb.jar | awk '{print $1 "  simpleweb.jar"}' > simpleweb.jar.sha256
-          gh release view "$RELEASE_TAG" >/dev/null 2>&1 \
-            || gh release create "$RELEASE_TAG" --prerelease --title "Rolling build" --notes "由 CI 自動更新的最新可部署版本"
-          gh release upload "$RELEASE_TAG" target/simpleweb.jar build-sha.txt simpleweb.jar.sha256 --clobber
-
       # 使用 OIDC 登入 Azure（沒有任何長期密碼存在 GitHub）
       - name: Azure login (OIDC)
         uses: azure/login@v3
@@ -64,6 +49,23 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload immutable deployment assets
+        run: |
+          printf '%s\n' "$GITHUB_SHA" > build-sha.txt
+          sha256sum target/simpleweb.jar | awk '{print $1 "  simpleweb.jar"}' > simpleweb.jar.sha256
+          for file in simpleweb.jar simpleweb.jar.sha256 build-sha.txt; do
+            source="target/$file"
+            [ "$file" = "simpleweb.jar" ] || source="$file"
+            az storage blob upload \
+              --auth-mode login \
+              --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}" \
+              --container-name deployments \
+              --name "builds/${GITHUB_SHA}/$file" \
+              --file "$source" \
+              --overwrite true \
+              --output none
+          done
 
       # 共享課程訂閱可能有外部 auto-shutdown；部署前先確保 VM 正在執行。
       - name: Ensure VM is running
@@ -73,27 +75,30 @@ jobs:
             --name "${{ vars.AZURE_VM_NAME }}"
 
       - name: Deploy to test VM
-        env:
-          JAR_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/simpleweb.jar
-          DIGEST_URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/simpleweb.jar.sha256
         run: |
           output="$(az vm run-command invoke \
             --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
             --name "${{ vars.AZURE_VM_NAME }}" \
             --command-id RunShellScript \
-            --scripts "
+            --parameters "${{ vars.AZURE_STORAGE_ACCOUNT }}" "${{ github.sha }}" \
+            --scripts '
               set -eu
-              curl -fsSL --retry 3 -o /tmp/simpleweb.jar '$JAR_URL'
-              curl -fsSL --retry 3 -o /tmp/simpleweb.jar.sha256 '$DIGEST_URL'
+              ACCOUNT="$1"; SHA="$2"
+              TOKEN_JSON="$(curl -fsS -H Metadata:true "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fstorage.azure.com%2F")"
+              TOKEN="$(printf "%s" "$TOKEN_JSON" | sed -n "s/.*\"access_token\":\"\([^\"]*\)\".*/\1/p")"
+              test -n "$TOKEN"
+              BASE="https://${ACCOUNT}.blob.core.windows.net/deployments/builds/${SHA}"
+              curl -fsSL --retry 3 -H "Authorization: Bearer $TOKEN" -H "x-ms-version: 2023-11-03" -o /tmp/simpleweb.jar "$BASE/simpleweb.jar"
+              curl -fsSL --retry 3 -H "Authorization: Bearer $TOKEN" -H "x-ms-version: 2023-11-03" -o /tmp/simpleweb.jar.sha256 "$BASE/simpleweb.jar.sha256"
               cd /tmp
               sha256sum -c simpleweb.jar.sha256
               install -o simpleweb -g simpleweb -m 0644 /tmp/simpleweb.jar /opt/simpleweb/test/simpleweb.jar
-              printf 'APP_BUILD_SHA=%s\nAPP_BUILD_TIME=%s\n' '${{ github.sha }}' \"\$(date -u +%FT%TZ)\" > /opt/simpleweb/test/app.env
+              printf "APP_BUILD_SHA=%s\nAPP_BUILD_TIME=%s\n" "$SHA" "$(date -u +%FT%TZ)" > /opt/simpleweb/test/app.env
               systemctl restart simpleweb-test
               sleep 5
               systemctl is-active simpleweb-test
               echo DEPLOY_OK
-            " \
+            ' \
             --query "value[0].message" -o tsv)"
           echo "$output"
           printf '%s' "$output" | grep -q DEPLOY_OK
