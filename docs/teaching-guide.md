@@ -280,9 +280,12 @@ workflow 檔案、GitHub 設定與部署身分（`demo-java-04` 至 `demo-java-0
   會快速失敗。持久的 `AllowSshFromAzureCloud`（來源 `AzureCloud`）NSG 規則須確認仍在，
   若被共享 policy 移除，由講師手動還原，不擴大為 `Internet` 來源、也不建立臨時規則。
 - [ ] `simpleweb-test`（`8080`）與 `simpleweb-prod`（`8081`）systemd services 均 healthy；`/`、`/api/info`、`/actuator/health` 可回應。
-- [ ] `VM_SSH_PRIVATE_KEY` 必須是 repository secret，**或**在 `test` 與 `production`
-  兩個 Environment 各自重複設定一份（`04`/`05`/`06` 都會用到，兩種設定擇一但須一致）；
-  同時確認 repository variable `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser` 與
+- [ ] `VM_SSH_PRIVATE_KEY` 必須設成 `test` 與 `production` 兩個 Environment 各一份的
+  **Environment secret（不是 repository secret）**，這樣任意分支的 job 讀不到這把可 sudo 的
+  長期私鑰；`04`/`05`/`06` 三個 job 都宣告了對應 environment，同名 secret 因而能各自解析。
+  舊的 repository 層級副本只有在兩個 Environment 都設好、且 default branch 的 `04`/`05`/`06`
+  實跑成功後，才由講師之後另外刪除。同時確認 repository variable `VM_PUBLIC_IP`、
+  `VM_SSH_USER=azureuser` 與
   `VM_SSH_HOST_KEY` 已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo**
   各自設定（`terraform apply` 後如何從 outputs 帶出這些值並分別設到兩個 repo，見
   [Trainer demo environment guide](demo-environment.md) 的「Terraform outputs → GitHub

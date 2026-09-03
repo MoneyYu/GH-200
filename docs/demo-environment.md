@@ -56,7 +56,8 @@ pre-refactor 歷史 run；它與下方 `MoneyYu/GH-200` self-contained workflows
 SSH-only 機制是兩套獨立設定，不代表 `MoneyYu/GH-200` 現在也使用 Run Command 或 digest
 transport。class repo 自身的 `04`-`06`／`07`／`08` 編號已在後續對齊工作中改為與
 `MoneyYu/GH-200` 相同的 SSH-only／OIDC-webapp／same-VM-runner 主線設計（見下一節），但
-**尚未有該次對齊後的 live workflow run**——目前只完成程式碼與 Terraform 的靜態驗證。
+**尚未有該次對齊後的 live workflow run**——目前只完成程式碼靜態驗證（Terraform 基礎設施
+已 apply 完成、apply 後 `plan` 乾淨，見下方 Terraform 章節）。
 
 ### MoneyYu/GH-200 self-contained workflows
 
@@ -66,7 +67,8 @@ GH-200 自己是 private repo，因此 `demo-java-04`/`05`/`06` 不使用匿名 
 
 1. GitHub-hosted runner 建置、測試並打包 jar 為 `actions/upload-artifact` workflow
    artifact（不上傳到 Azure）。
-2. `demo-java-04-deploy-test` 用 repository secret `VM_SSH_PRIVATE_KEY` 建立僅本次 run
+2. `demo-java-04-deploy-test` 用 Environment secret `VM_SSH_PRIVATE_KEY`（設在 `test` 與
+   `production` 兩個 Environment，不是 repository secret）建立僅本次 run
    使用的 SSH 身分，並以 repository variable `VM_SSH_HOST_KEY`（完整 OpenSSH
    `known_hosts` 格式，不是 `SHA256:` 指紋）做 `StrictHostKeyChecking=yes` 的主機指紋
    釘選；**不使用** `ssh-keyscan` 或任何 per-run TOFU（trust-on-first-use）。
@@ -82,8 +84,10 @@ GH-200 自己是 private repo，因此 `demo-java-04`/`05`/`06` 不使用匿名 
 
 | 項目 | 值／用途 |
 |---|---|
-| Repository secret | `VM_SSH_PRIVATE_KEY`（deploy 用 SSH private key；`04`/`05`/`06` 都會用到，因此設在
-  repository 層級，或需要在 `test` 與 `production` 兩個 Environment 各設一份） |
+| Environment secret | `VM_SSH_PRIVATE_KEY`（deploy 用 SSH private key；設在 `test` 與 `production`
+  兩個 Environment 各一份，**不是** repository secret，避免任意分支的 job 讀到這把可 sudo 的長期私鑰。
+  `04`/`05`/`06` 三個 job 都宣告了對應 environment，同名 secret 因而能各自解析。舊的 repository 層級
+  副本只有在兩個 Environment 都設好、且 default branch 的 `04`/`05`/`06` 實跑成功後，才由講師之後另外刪除） |
 | Repository variable | `VM_PUBLIC_IP` |
 | Repository variable | `VM_SSH_USER=azureuser` |
 | Repository variable | `VM_SSH_HOST_KEY`（完整 OpenSSH `known_hosts` 行；於受信任網路下設定/擷取，VM host key
@@ -210,7 +214,7 @@ Get-Content -Raw -LiteralPath $knownHostsPath |
 - [ ] `01.build`…`06.full-pipeline` 至少有一組可展示的 run；`09.troubleshooting` 有可讀的失敗案例。
 - [ ] 若示範 VM self-hosted runner，runner 已在 GitHub UI 顯示可用，registration token 僅在註冊當下取得；registration 需要講師以受信任的手動連線／session 完成，且 runner 應用程式須每 30 天內更新一次，否則 GitHub 不會再派工作給它。
 - [ ] 課前用 Azure CLI 確認並啟動（若已 deallocate）SSH 部署目標 VM；`04`/`05`/`06` 的 workflow 完全不含 Azure 登入，也不會自行啟動 VM，VM 未開機或 TCP/22 未開放時 SSH 連線步驟會快速失敗。
-- [ ] `VM_SSH_PRIVATE_KEY`（secret）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、`VM_SSH_HOST_KEY`（variables）已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo** 各自設定（見上方「Terraform outputs → GitHub variables」）；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts` 行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入，VM host key 輪替後需手動更新。
+- [ ] `VM_SSH_PRIVATE_KEY`（**設在 `test` 與 `production` 兩個 Environment 各一份的 Environment secret，不是 repository secret**）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、`VM_SSH_HOST_KEY`（variables）已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo** 各自設定（見上方「Terraform outputs → GitHub variables」）；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts` 行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入，VM host key 輪替後需手動更新。
 - [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`（variables）已從 Terraform outputs（`web_app_name`、`web_app_url`）在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp` 專屬的 OIDC identity 已依上方「Azure RBAC for the 07 OIDC identity」在兩個 repo 各自建立，且範圍是精準的該 Linux Web App（`Website Contributor`），未沿用舊有的 VM／Blob 共用 identity。
 - [ ] `AZURE_WEBAPP_CLIENT_ID`（secret）已在**兩個 repo**各自設定，提供上述專屬 Web App identity 的 client ID 給 `07`／`demo-java-07-deploy-webapp` 的 `azure/login`；舊的 `AZURE_CLIENT_ID` 目前維持不動，等其他 VM／Blob 相關使用者全部除役後才處理。
 
@@ -253,15 +257,15 @@ admin user 為 `azureuser`，只用 SSH public key 認證（`linux_ssh_public_ke
 > [!CAUTION]
 > Repo 的一般規則禁止 agent 執行 `terraform apply`。`GH200-0903` 在 SSH-only 重構存在之前，
 > 已有一次不同、**已完成**的歷史 apply：`18 added, 0 changed, 0 destroyed`，建立含 Windows
-> VM/Web App 的舊有 stack；這是已發生的歷史事實，與下方針對 SSH-only 重構的授權是不同事件。
+> VM/Web App 的舊有 stack；這是已發生的歷史事實，與下方 SSH-only 重構是不同事件。
 >
-> **針對 SSH-only 重構本身**（移除 Windows VM/Web App、改用 `linux_ssh_public_key`、加入
-> `AllowSshFromAzureCloud`、runner 預先安裝 extension），使用者授權對 `GH200-0903` 執行
-> **恰好一次** reviewed apply，且僅限於已審閱的 plan 與 implementation gate 通過之後。
-> 截至目前只跑過 `plan`，**尚未實際 apply，不得宣稱這次重構已經套用到 Azure**。**未經
-> 使用者新的明確授權，不得再次執行 apply**。`terraform destroy` **必須有使用者新的明確
-> 要求並經確認**才可執行；課程開始前絕對不得執行，也不得以 display name、prefix 或
-> wildcard 對共享 subscription 清理。
+> **SSH-only 重構本身**（移除 Windows VM/Web App、改用 `linux_ssh_public_key`、加入
+> `AllowSshFromAzureCloud`、runner 預先安裝 extension）那次使用者授權的**恰好一次** reviewed
+> apply **已經完成**：它移除了 Windows stack、建立了 Linux Java Web App 與 runner 預先安裝
+> extension、變更了 NSG（來源受限的 `AllowSshFromAzureCloud`），且 apply 後的 `terraform plan`
+> 乾淨無漂移。該次授權已用罄，**不得再執行或指示任何 `apply`**；每一次額外的 apply 都需要
+> 使用者新的明確授權。`terraform destroy` **必須有使用者新的明確要求並經確認**才可執行；
+> 課程開始前絕對不得執行，也不得以 display name、prefix 或 wildcard 對共享 subscription 清理。
 
 Terraform 的閱讀、`fmt`、`init`、`validate`、`plan` 仍應依 [`../TERRAFORM/README.md`](../TERRAFORM/README.md) 與既有 repo 規則由適當人員處理。本文不修改或重新定義 Terraform 設定。
 
@@ -296,20 +300,21 @@ Terraform 不會建立 GitHub repository、workflow、Environment、secret、pac
   RBAC 小節）實際 dispatch 一次，確認 `azure/login` 與 `azure/webapps-deploy` 成功，
   並用 `/api/info` 的 build SHA 做語意化 smoke test。
 - [ ] **尚待課前驗證**：`MoneyYu/GH-200` 的 SSH-only `04`/`05`/`06`
-  尚未有 live workflow dispatch 證據；目前只完成程式碼與 Terraform 的靜態驗證
-  （lint／`bash -n`／`terraform validate`／`plan`），未實際觸發 workflow 或執行
-  `terraform apply`。課前須實際 dispatch 一次，確認 `VM_SSH_PRIVATE_KEY` +
-  `VM_SSH_HOST_KEY` 主機指紋釘選、SCP、`systemctl restart` 與 `/api/info` SHA smoke
-  test 全部成功，且持久的 `AllowSshFromAzureCloud`（來源 `AzureCloud`，非
-  `Internet`）規則確實可讓 GitHub-hosted runner 連線；不需要、也不應該建立任何
-  臨時 `AllowSshForDemo` 規則。
+  尚未有 live workflow dispatch 證據；Terraform 基礎設施**已 apply 完成**（apply 後
+  `plan` 乾淨無漂移，見上方 `[!CAUTION]`），但 workflow 本身目前只完成程式碼靜態驗證
+  （lint／`bash -n`），尚未實際觸發 workflow。課前須實際 dispatch 一次，確認
+  `VM_SSH_PRIVATE_KEY` + `VM_SSH_HOST_KEY` 主機指紋釘選、SCP、`systemctl restart` 與
+  `/api/info` SHA smoke test 全部成功，且持久的 `AllowSshFromAzureCloud`（來源
+  `AzureCloud`，非 `Internet`）規則確實可讓 GitHub-hosted runner 連線；不需要、也不應該
+  建立任何臨時 `AllowSshForDemo` 規則。
 - [x] `systemctl` 顯示 `simpleweb-test` 和 `simpleweb-prod` 運作，兩個 health endpoint 為 `UP`。
 - [x] Ephemeral self-hosted runner 已接走一個 trusted workflow，job 完成後 runner count 回到 `0`。
 
 ### Lifecycle and cleanup
 
-- [ ] `GH200-0903` stack 的原始 apply（`18 added, 0 changed, 0 destroyed`）已就緒；
-  SSH-only 重構的 Terraform plan 已審閱但**尚未 apply**；**課前不執行 destroy**。
+- [ ] `GH200-0903` stack 的原始 apply（`18 added, 0 changed, 0 destroyed`）與後續 SSH-only
+  重構的 apply 都**已完成**（重構 apply 後 `terraform plan` 乾淨無漂移）；**不再執行任何
+  apply，課前也不執行 destroy**。
 - [ ] 清理只針對人員確認的精確 resource ID／名稱與本次 runner/package；不做自動或萬用字元清理。
 
 ## Trust boundaries and live-failure handling
@@ -318,7 +323,7 @@ Terraform 不會建立 GitHub repository、workflow、Environment、secret、pac
 |---|---|---|
 | `GITHUB_TOKEN` | repository 內 GitHub API 操作 | 不作 Azure 登入。 |
 | Azure OIDC | Azure deploy 的短期 token（`07.deploy-webapp`） | 不用來取代 `GITHUB_TOKEN`；`04`-`06` 完全不使用它。 |
-| `VM_SSH_PRIVATE_KEY` | `04`/`05`/`06` 主線 SSH 部署身分 | 不貼入 repo、log 或投影片；每個 job run 結束都清除暫存檔。 |
+| `VM_SSH_PRIVATE_KEY` | `04`/`05`/`06` 主線 SSH 部署身分（設為 `test`/`production` Environment secret） | 不貼入 repo、log 或投影片；每個 job run 結束都清除暫存檔。 |
 | self-hosted runner token | 一次性的 runner 註冊 | 不保存或重用。 |
 
 若 live deploy 失敗，先保留 run，按 workflow → SSH 連線 → SCP → systemd → health endpoint 的順序定位（`07.deploy-webapp` 則是 workflow → OIDC → Web App deploy → health endpoint）。三分鐘後切至成功 run／health screenshot；不臨時改 Terraform、不開放額外網路連接埠、不關掉 approval gate，也不將 secret 當作除錯輸出。

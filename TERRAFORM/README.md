@@ -100,11 +100,13 @@ terraform plan -var "group_postfix=0903"
 > [!WARNING]
 > 本 repo 明確禁止 AI agent 執行 `terraform apply`。此 stack 在 SSH-only 重構之前，`GH200-0903`
 > 已有一次不同、已完成的歷史 apply（`18 added, 0 changed, 0 destroyed`，建立含 Windows VM/Web
-> App 的舊有 topology）。**針對 SSH-only 重構本身**（移除 Windows VM/Web App、改用
-> `linux_ssh_public_key`、加入 `AllowSshFromAzureCloud`、runner 預先安裝 extension），使用者僅
-> 授權 trainer 在檢閱過 plan 且通過 implementation gate 後手動執行**一次** reviewed apply；
-> 截至目前只跑過 `plan`，尚未實際 apply，**不得宣稱已套用到 Azure**。**未經使用者新的明確
-> 授權，不得再次執行 apply**：
+> App 的舊有 topology）。**SSH-only 重構本身**（移除 Windows VM/Web App、改用
+> `linux_ssh_public_key`、加入 `AllowSshFromAzureCloud`、runner 預先安裝 extension）那次使用者
+> 授權的**一次** reviewed apply **已經完成**：Windows stack 已移除、Linux Java Web App 與 runner
+> 預先安裝 extension 已建立、NSG 已更新（來源受限的 `AllowSshFromAzureCloud`），且 apply 後的
+> `terraform plan` 乾淨無漂移。該次授權已用罄——**不得再執行或指示任何 `apply`**；每一次額外的
+> apply 都需要使用者新的明確授權。權威政策見 `.github/copilot-instructions.md` 的 apply/destroy
+> 單一真相段落，本文不重述不同版本。下列 `apply` 指令僅供了解語法，AI agent 不得執行：
 >
 > ```powershell
 > $env:TF_VAR_linux_ssh_public_key = (Get-Content -Raw "$HOME\.ssh\gh200-linux.pub").Trim()

@@ -22,6 +22,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # 與 04/05/06 共用同一把部署鎖，避免 self-hosted 本機部署與 SSH 部署同時重啟 simpleweb-test。
+  group: simpleweb-deploy
+  cancel-in-progress: false
+
 jobs:
   build-on-selfhosted:
     # 這裡不是 ubuntu-latest，而是你自己註冊的 runner 的 labels
