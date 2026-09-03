@@ -29,6 +29,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       # self-hosted runner 的環境「不會每次重置」，
       # 所以要明確指定版本，不能假設機器上剛好有你要的 JDK

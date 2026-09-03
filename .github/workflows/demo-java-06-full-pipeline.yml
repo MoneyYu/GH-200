@@ -34,6 +34,8 @@ jobs:
       sha_short: ${{ steps.meta.outputs.sha_short }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@v6
         with:
