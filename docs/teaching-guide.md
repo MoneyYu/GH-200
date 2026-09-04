@@ -94,13 +94,17 @@ live dispatch 成功**（`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 的 run
 `docs/demo-environment.md` 的「Identity and VM」勾選項，含早期 OneDeploy 400 失敗的
 action-path 證據與後續 Azure CLI 成功的 run），且兩邊 `/api/info` 的 build SHA 與
 default-branch run SHA 完全相符；**兩個 repo 的 `07` 不可同時 dispatch**（共用同一個
-Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗，需序列化執行）；課堂這
+Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗）：必須等前一個 repo 的
+`07` run 成功、且 `/api/info` 的 `buildSha` 已核對等於該次 commit SHA 之後，才能 dispatch
+另一個 repo 的 `07`；最後成功部署的一方會覆蓋 App Service 上的版本（last successful
+deployment wins）；若仍發生碰撞或逾時失敗，等兩邊 run 都跑完後只重新 dispatch 想要的那個
+repo 並重新核對 SHA，不要用 `concurrency:` group 偽造跨 repo 鎖定；課堂這
 一段 demo 只使用 `MoneyYu/GH-200` 的 workflows。
 
 | 項目 | 課堂呈現（`MoneyYu/GH-200`；class repo 現行對齊後的編號相同，但獨立維護） |
 |---|---|
 | Azure Ubuntu 24.04 Linux VM | 同一台 VM 承載兩個 systemd services：`simpleweb-test` 在 `8080`，`simpleweb-prod` 在 `8081`；VM 同時模擬 on-prem application server。 |
-| GitHub Environments | `test` 與 `production`；`production` 有 required-reviewer approval gate。 |
+| GitHub Environments | `test` 與 `production`；`MoneyYu/GH-200` 的方案**不支援** Environment required reviewers（API 回傳 HTTP 422），**不得**描述成有 required-reviewer gate，`06.full-pipeline` 改以 `confirm_production=deploy` 手動輸入確認取代；要展示真正的 reviewer gate 需切到 `MoneyDemo/20260903-GH200` class repo（其 `production` 保留 required-reviewer gate）。 |
 | 主線部署（04-06） | SSH-only：Build → Test → Package → SCP → SSH → `systemctl` → 語意化 `/api/info` SHA smoke test（M5）。強調需要開放 inbound TCP/22 並在 GitHub 保存長期 private key，主機指紋釘選在 `VM_SSH_HOST_KEY`，不使用動態 `ssh-keyscan`。 |
 | OIDC/PaaS 對照（07） | `07.deploy-webapp`：Azure OIDC 部署到 Linux App Service，強調短期 token、`permissions: id-token: write` 與精準 federated credential，不需要開放連接埠或保存長期 private key，因此不是主線的 VM 部署路徑；兩個 repo 各自使用專屬的 OIDC identity（`Website Contributor`，範圍限定該 Web App），不共用。 |
 | Self-hosted runner 對照（08） | `08.selfhosted-runner`（M4）：runner 與 SSH 部署目標同一台 VM，是課堂簡化；適合說明網路可達性、runner group、殘留狀態與不信任 PR 的風險，這條路徑本身不需要 inbound SSH。 |
@@ -273,7 +277,7 @@ Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗�
 - [ ] 可開啟 <https://github.com/MoneyDemo/20260903-GH200>，並確認 `labs/lab01`…`labs/lab06`、可選 `lab07` 與 workflows 可讀取。
 - [ ] 在可丟棄分支／repo 實跑一個 `workflow_dispatch`，確認 Build、Test、Package、Artifact 與 log 可展示。
 - [ ] organization 與 target repository 的 Actions 均啟用，allowed-actions policy 不會擋住課堂使用的 action；確認預設 `GITHUB_TOKEN` 權限，workflow 仍採 least privilege。
-- [ ] `test`、`production` GitHub Environments 存在；production 的 required-reviewer approval gate 由正確人員可核准。兩個 repo 的 `test`／`production` 現在都已設定 default-branch-only 部署限制，`MoneyDemo/20260903-GH200` 的 `production` 在此之上仍保留 required-reviewer gate（未被取代）；開課前重新確認兩者仍生效。
+- [ ] `test`、`production` GitHub Environments 存在；class repo `MoneyDemo/20260903-GH200` 的 production required-reviewer approval gate 由正確人員可核准（`MoneyYu/GH-200` 無 reviewer gate，改用 `confirm_production=deploy`）。兩個 repo 的 `test`／`production` 現在都已設定 default-branch-only 部署限制，`MoneyDemo/20260903-GH200` 的 `production` 在此之上仍保留 required-reviewer gate（未被取代）；開課前重新確認兩者仍生效。
 - [ ] OIDC 所需 GitHub Environment secrets/variables 已存在，但不在投影片、chat、terminal history 或 YAML 明文出現。
 - [ ] M4 若需 UI demo，確認講師可見 organization policies / runner groups；否則備妥架構圖或成功截圖。
 - [ ] runner registration token 僅於課堂前註冊時取得；若需要 self-hosted runner，確認主機出站連線與最小 trusted workflow。
@@ -308,7 +312,7 @@ Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗�
   troubleshooting 練習使用，不再對應任何 VM／Blob 部署身分（詳見
   [Trainer demo environment guide](demo-environment.md) 的「Azure RBAC for the 07 OIDC
   identity」）。
-- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照均已各自在兩個 repo live dispatch 成功一次（含身分除役之後的 `06`／`07` 重新 dispatch，見 `docs/demo-environment.md` 的「Identity and VM」勾選項與 run 連結）；開課前建議各自再 dispatch 一次確認當天環境仍正常。**⚠️ 兩個 repo 的 `07` 不可同時 dispatch**（共用同一個 Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗）。
+- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照均已各自在兩個 repo live dispatch 成功一次（含身分除役之後的 `06`／`07` 重新 dispatch，見 `docs/demo-environment.md` 的「Identity and VM」勾選項與 run 連結，屬先前一次交付的歷史證據）；**下一場交付前講師必須各自重新 dispatch 一次並以 `/api/info` 核對 `buildSha` 與該次 commit SHA 相符**，不可只憑上述歷史紀錄視為當次仍然有效。**⚠️ 兩個 repo 的 `07` 不可同時 dispatch**（共用同一個 Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗）：需等前一個 repo 的 `07` 成功且 `/api/info` SHA 核對相符後才能 dispatch 另一個；最後成功部署者覆蓋 App Service 版本；碰撞或逾時時等兩邊都跑完再重新 dispatch 並核對 SHA，不得用 `concurrency:` group 偽造跨 repo 鎖定（完整規則見 `docs/demo-environment.md`）。
 - [ ] `TERRAFORM/` 現行 stack 沒有 Windows VM 或 Windows Web App；若未來另有 C# demo 需求，需另行規劃基礎設施，不要把 Java jar 部署到 Linux Java Web App 以外的目標。
 
 ### 行政、連結與備援

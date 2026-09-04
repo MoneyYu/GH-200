@@ -61,9 +61,15 @@ behavioral — this is not a place for narrative history.
   to their default branch; MoneyDemo's `production` still keeps its required-reviewer gate on
   top of that.
 - **Never dispatch both repos' `07` workflows at the same time.** They share one Linux Web App,
-  and concurrent OneDeploy requests have been observed to fail the App Service startup timeout —
-  this is an operational sequencing rule for trainers/agents, not a GitHub cross-repo concurrency
-  lock, so do not implement a `concurrency:` group spanning both repos to "fix" it.
+  and concurrent OneDeploy requests have been observed to fail the App Service startup timeout.
+  **Rule:** do not start the other repo's `07` until the first repo's `07` run has completed
+  successfully *and* the Web App's `/api/info` response has been confirmed to show that run's
+  expected commit SHA. Whichever repo's `07` deploys successfully last silently overwrites the
+  live app version (last successful deployment wins) — there is no versioned rollback. On a
+  collision or a timeout failure, wait for **both** runs to finish, then re-dispatch only the
+  repo you actually want live and re-verify its SHA via `/api/info` before treating it as done.
+  This is an operational sequencing rule for trainers/agents, not a GitHub cross-repo concurrency
+  lock, so do not implement a `concurrency:` group spanning both repos to fake one.
 - The shared Azure subscription enforces policy after deployment: Public IP resources receive a
   `FirstPartyUsage` tag, Windows OS disks use `Standard_LRS`, Web App basic publishing auth stays
   disabled, and persistent Internet-sourced SSH rules are removed. **The Linux VM's OS disk also
