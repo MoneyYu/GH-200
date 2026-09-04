@@ -36,6 +36,13 @@ resource "azurerm_linux_web_app" "lab" {
     }
   }
 
+  # Managed test-environment marker so the PaaS/OIDC contrast reports
+  # environment: test instead of the misleading default "local". This is the
+  # only managed app setting; runtime, site config, and lifecycle are unchanged.
+  app_settings = {
+    APP_ENVIRONMENT = "test"
+  }
+
   tags = local.default_tags
 }
 
