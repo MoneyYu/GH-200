@@ -10,7 +10,10 @@
 # ⚠️ 安全紅線
 #   絕對不要讓不信任的 fork PR 跑到 self-hosted runner 上。
 #   外部 PR 送進來的 workflow 會直接在你的機器上執行任意程式碼。
-#   本課的示範 repo 僅供課堂使用，示範結束後請把 runner 移除。
+#   這個 MoneyYu/GH-200 是私有 repo，它的 self-hosted runner 是「常駐課程基礎設施」：
+#   持續註冊、上線承載這個 demo，示範後**不移除**、registered runner 數不歸零。
+#   （對照：public class repo MoneyDemo/20260903-GH200 刻意不註冊任何 runner，其 08 以
+#   repository visibility 作 fail-closed 條件，在 public upstream 一律略過。）
 #   GitHub 不會把 job 派給 30 天內沒有更新 runner application 的 runner。
 #
 # 這支預設不會自動跑；要先在 VM 上註冊好 runner 並貼上 gh200 這個 label。

@@ -42,9 +42,22 @@ behavioral — this is not a place for narrative history.
   and do not claim those historical runs used SSH. Nothing in either repo's active workflows uses
   Azure Run Command or Azure Arc; do not reintroduce that as an active path.
 - The deployed Java target is `lab-linux-0903-ksh` in `GH200-0903`: test on port `8080`,
-  production on `8081`. Production uses a GitHub Environment required-reviewer gate. The same
+  production on `8081`. The class repo `MoneyDemo/20260903-GH200`'s `production` uses a GitHub
+  Environment required-reviewer approval gate; `MoneyYu/GH-200` has no required reviewers and
+  instead gates production with the manual `confirm_production=deploy` input — keep the two
+  distinct and never describe `MoneyYu/GH-200` as having a required-reviewer gate. The same
   Linux VM is also the SSH-only deployment target for `MoneyYu/GH-200`'s `demo-java-04`-`06` and
   hosts the same-VM self-hosted runner demo (`08`), as a classroom simplification.
+- **Self-hosted runner safety (persistent private runner; zero public runner).** The
+  `MoneyYu/GH-200` self-hosted runner is 常駐課程基礎設施 (persistent course infrastructure) that
+  stays registered/online for `demo-java-08`; it is **not** ephemeral and is not deregistered
+  after the demo. The public class repo `MoneyDemo/20260903-GH200` intentionally has zero
+  registered self-hosted runners (registered runner 數維持為零), and its `08.selfhosted-runner`
+  fails closed on `github.event.repository.visibility == 'private'`, so class 08 在 public
+  upstream 略過 (is skipped on the public upstream) and only a learner's own **private copy** (a private clone/import, not a public network fork) with
+  its own isolated runner runs it. Do not write instructions that register a runner to the public
+  class upstream, that say the private runner should be removed after the demo, or that claim the
+  runner count returns to zero after a run.
 - **Live-run evidence and access retirement are both complete** — do not re-describe either as
   "pending validation" anywhere in this repo. Both repos have live `workflow_dispatch` success
   evidence for `04`-`06` (SSH-only), `07`/`demo-java-07-deploy-webapp` (OIDC + Azure CLI JAR
@@ -53,9 +66,13 @@ behavioral — this is not a place for narrative history.
   duplicate raw run IDs here. The old shared Azure identity used for VM/Blob access before the
   SSH-only refactor (its four federated identity credentials, `Virtual Machine Contributor`,
   `Storage Blob Data Contributor`, and the Linux VM's `Storage Blob Data Reader`) has been
-  removed; the `AZURE_CLIENT_ID` secret name now backs only the class repo's Lab 06
-  broken-3/fixed-3 M2 OIDC troubleshooting exercise and no longer has any VM/Blob deployment
-  role — never reuse it for a deployment identity. Both repos' repository-level
+  removed; the class repo's Lab 06 broken-3/fixed-3 M2 OIDC troubleshooting exercise now
+  references the dedicated, instructor-owned `AZURE_WEBAPP_CLIENT_ID` (the same protected-main
+  Web App identity used by `07`), not the retired shared secret. That exercise is an
+  instructor-owned protected-main identity exercise: student forks receive no Azure identity and
+  only diagnose the `id-token: write` failure, so never describe the retired shared identity as a
+  valid live identity for it, and never reuse the retired identity for a deployment. Both repos'
+  repository-level
   `VM_SSH_PRIVATE_KEY` copies have been deleted; the secret now exists only as `test`/`production`
   Environment secrets. Both repos also now restrict `test`/`production` Environment deployments
   to their default branch; MoneyDemo's `production` still keeps its required-reviewer gate on
@@ -70,6 +87,14 @@ behavioral — this is not a place for narrative history.
   repo you actually want live and re-verify its SHA via `/api/info` before treating it as done.
   This is an operational sequencing rule for trainers/agents, not a GitHub cross-repo concurrency
   lock, so do not implement a `concurrency:` group spanning both repos to fake one.
+- **VM 部署排序規則（04/05/06/08）.** Both repos' `04`/`05`/`06` (SSH deploy) and `08` (same-VM
+  self-hosted runner) write the *same* shared Linux VM `simpleweb-test` (`8080`) and
+  `simpleweb-prod` (`8081`) systemd services. Serialize them across the two repos exactly like the
+  `07` rule: do not start one repo's VM-deploy workflow (`04`/`05`/`06`/`08`) until the other
+  repo's prior run has completed successfully **and** the relevant `8080` or `8081` `/api/info`
+  endpoint has been confirmed to show that run's expected commit SHA. This too is a manual
+  operator sequencing rule, not a GitHub cross-repo concurrency lock — do not add a fake
+  `concurrency:` group spanning both repos.
 - The shared Azure subscription enforces policy after deployment: Public IP resources receive a
   `FirstPartyUsage` tag, Windows OS disks use `Standard_LRS`, Web App basic publishing auth stays
   disabled, and persistent Internet-sourced SSH rules are removed. **The Linux VM's OS disk also

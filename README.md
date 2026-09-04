@@ -52,8 +52,9 @@ then verify the deployed commit SHA — and promote a verified test build to pro
 on-premises VM simulation, over SSH. `demo-java-07` is a contrast that deploys the same Java app
 to a Linux App Service through Azure OIDC — a PaaS/OIDC comparison, not a VM deployment path.
 `demo-java-08` runs on the same VM as the SSH deploy target, as a classroom simplification; this
-path itself needs no inbound SSH access. It requires registering an ephemeral runner with the
-`gh200` label; it otherwise stays queued by design. The `confirm_production=deploy` input
+path itself needs no inbound SSH access. It runs on the persistent `gh200`-labelled self-hosted
+runner registered to this private repo (persistent course infrastructure, not removed after the
+demo); it otherwise stays queued by design. The `confirm_production=deploy` input
 prevents accidental deployment but does
 **not** provide separation of duties; use the MoneyDemo class repo for the real reviewer gate.
 

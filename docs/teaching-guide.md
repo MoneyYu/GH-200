@@ -63,7 +63,7 @@
 | 10:40–10:55 | 休息 | 15 |
 | 10:55–12:10 | **M2**：logs、debug、failure troubleshooting + `lab06` | 75 |
 | 12:10–13:10 | 午餐 | 60 |
-| 13:10–14:10 | **M4**：governance、runner groups、ephemeral self-hosted runner + `lab07`（選修） | 60 |
+| 13:10–14:10 | **M4**：governance、runner groups、self-hosted runner + `lab07`（選修） | 60 |
 | 14:10–14:25 | 休息 | 15 |
 | 14:25–16:00 | **M5**：Azure OIDC、test → production、approval gate + `lab04`/`lab05` | 95 |
 | 16:00–16:15 | 休息 | 15 |
@@ -307,12 +307,16 @@ repo 並重新核對 SHA，不要用 `concurrency:` group 偽造跨 repo 鎖定�
   該 Linux Web App，不是 resource group 或 subscription）與 workflow
   `permissions: id-token: write`，subject 對應「該 repo 自己」的 repo 與 Environment。
   SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity（四個 federated credential、
-  VM Contributor、Blob Contributor 角色與 Blob Reader）**已除役移除**；舊的
-  `AZURE_CLIENT_ID` secret 名稱僅保留給 class repo Lab 06 broken-3／fixed-3 的 M2 OIDC
-  troubleshooting 練習使用，不再對應任何 VM／Blob 部署身分（詳見
+  VM Contributor、Blob Contributor 角色與 Blob Reader）**已除役移除**；class repo 的
+  Lab 06 broken-3／fixed-3（M2 OIDC troubleshooting）現在改為引用同一個 instructor-owned 的
+  `AZURE_WEBAPP_CLIENT_ID`（講師擁有、只在 protected main 可實際登入的身分）：學員 fork
+  **不取得**該 Azure 身分，只診斷 `id-token: write` 失敗，**不得**把已除役的舊共用身分描述成
+  該練習的有效 live identity（詳見
   [Trainer demo environment guide](demo-environment.md) 的「Azure RBAC for the 07 OIDC
   identity」）。
-- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照均已各自在兩個 repo live dispatch 成功一次（含身分除役之後的 `06`／`07` 重新 dispatch，見 `docs/demo-environment.md` 的「Identity and VM」勾選項與 run 連結，屬先前一次交付的歷史證據）；**下一場交付前講師必須各自重新 dispatch 一次並以 `/api/info` 核對 `buildSha` 與該次 commit SHA 相符**，不可只憑上述歷史紀錄視為當次仍然有效。**⚠️ 兩個 repo 的 `07` 不可同時 dispatch**（共用同一個 Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗）：需等前一個 repo 的 `07` 成功且 `/api/info` SHA 核對相符後才能 dispatch 另一個；最後成功部署者覆蓋 App Service 版本；碰撞或逾時時等兩邊都跑完再重新 dispatch 並核對 SHA，不得用 `concurrency:` group 偽造跨 repo 鎖定（完整規則見 `docs/demo-environment.md`）。
+- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照均已各自在兩個 repo live dispatch 成功一次（含身分除役之後的 `06`／`07` 重新 dispatch，見 `docs/demo-environment.md` 的「Identity and VM」勾選項與 run 連結，屬先前一次交付的歷史證據）；**下一場交付前講師必須各自重新 dispatch 一次並以 `/api/info` 核對 `buildSha` 與該次 commit SHA 相符**，不可只憑上述歷史紀錄視為當次仍然有效。**`08.selfhosted-runner` 例外：** 在 public class repo `MoneyDemo/20260903-GH200` 上它以 `github.event.repository.visibility == 'private'` **fail-closed 而略過**（預期 skip、無 SHA 可核對），M4 的 live `08` 佐證只在私有的 `MoneyYu/GH-200`（`demo-java-08`，常駐 runner）進行——**切勿**為讓 class 08「成功」而在 public class repo 重新註冊 runner。**⚠️ 兩個 repo 的 `07` 不可同時 dispatch**（共用同一個 Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗）：需等前一個 repo 的 `07` 成功且 `/api/info` SHA 核對相符後才能 dispatch 另一個；最後成功部署者覆蓋 App Service 版本；碰撞或逾時時等兩邊都跑完再重新 dispatch 並核對 SHA，不得用 `concurrency:` group 偽造跨 repo 鎖定（完整規則見 `docs/demo-environment.md`）。
+- [ ] **共用 VM 部署排序規則（04/05/06/08）：** 兩個 repo 的 `04`/`05`/`06`（SSH）與 `08`（same-VM runner）都寫入同一台 VM 的 `simpleweb-test`（`8080`）／`simpleweb-prod`（`8081`）；比照 `07` 規則，需等另一個 repo 前一個 VM 部署 run 成功、且相關 `8080`／`8081` 的 `/api/info` 已確認回報該次 commit SHA 後，才能啟動本 repo 的 `04`/`05`/`06`/`08`。這是人工排程規則，不是 GitHub 跨 repo 鎖，不要用 `concurrency:` group 偽造。
+- [ ] **Self-hosted runner 常駐邊界：** `MoneyYu/GH-200` 的 self-hosted runner 是常駐課程基礎設施（示範後**不移除**、runner 數不歸零）；public class repo `MoneyDemo/20260903-GH200` 不註冊任何 runner（registered runner 數維持為零），其 `08` 以 `github.event.repository.visibility == 'private'` fail-closed，於 public upstream 略過（完整說明見 `docs/demo-environment.md` 的「Self-hosted runner 安全與常駐邊界」）。
 - [ ] `TERRAFORM/` 現行 stack 沒有 Windows VM 或 Windows Web App；若未來另有 C# demo 需求，需另行規劃基礎設施，不要把 Java jar 部署到 Linux Java Web App 以外的目標。
 
 ### 行政、連結與備援
