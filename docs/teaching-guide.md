@@ -308,10 +308,10 @@ repo 並重新核對 SHA，不要用 `concurrency:` group 偽造跨 repo 鎖定�
   `permissions: id-token: write`，subject 對應「該 repo 自己」的 repo 與 Environment。
   SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity（四個 federated credential、
   VM Contributor、Blob Contributor 角色與 Blob Reader）**已除役移除**；class repo 的
-  Lab 06 broken-3／fixed-3（M2 OIDC troubleshooting）現在改為引用同一個 instructor-owned 的
-  `AZURE_WEBAPP_CLIENT_ID`（講師擁有、只在 protected main 可實際登入的身分）：學員 fork
-  **不取得**該 Azure 身分，只診斷 `id-token: write` 失敗，**不得**把已除役的舊共用身分描述成
-  該練習的有效 live identity（詳見
+  Lab 06 broken-3／fixed-3（M2 OIDC troubleshooting）是全為零的佔位二階段診斷：
+  broken 版本缺少 `id-token: write`，所以 GitHub OIDC request 直接失敗；fixed 版本補上
+  `id-token: write`／`contents: read` 後會進入 Azure auth，但因為所有身分值仍是佔位值而
+  故意失敗。學員 fork 只用來觀察這個權限轉換，不要把它描述成真實的 live identity（詳見
   [Trainer demo environment guide](demo-environment.md) 的「Azure RBAC for the 07 OIDC
   identity」）。
 - [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照均已各自在兩個 repo live dispatch 成功一次（含身分除役之後的 `06`／`07` 重新 dispatch，見 `docs/demo-environment.md` 的「Identity and VM」勾選項與 run 連結，屬先前一次交付的歷史證據）；**下一場交付前講師必須各自重新 dispatch 一次並以 `/api/info` 核對 `buildSha` 與該次 commit SHA 相符**，不可只憑上述歷史紀錄視為當次仍然有效。**`08.selfhosted-runner` 例外：** 在 public class repo `MoneyDemo/20260903-GH200` 上它是**惰性參考範本**，job 以字面 `if: ${{ false }}` **永遠跳過**（預期 skip、無 SHA 可核對，在任何學員 fork／複本上亦然），M4 的 live `08` 佐證只在私有的 `MoneyYu/GH-200`（`demo-java-08`，常駐 runner）進行——**切勿**為讓 class 08「成功」而在 public class repo 或任何學員 fork 重新註冊 runner。**⚠️ 兩個 repo 的 `07` 不可同時 dispatch**（共用同一個 Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗）：需等前一個 repo 的 `07` 成功且 `/api/info` SHA 核對相符後才能 dispatch 另一個；最後成功部署者覆蓋 App Service 版本；碰撞或逾時時等兩邊都跑完再重新 dispatch 並核對 SHA，不得用 `concurrency:` group 偽造跨 repo 鎖定（完整規則見 `docs/demo-environment.md`）。
