@@ -16,6 +16,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: DEMO/JAVA
     steps:
       # 原 release tag: actions/checkout@v5
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -37,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: simpleweb-jar
-          path: target/simpleweb.jar
+          path: DEMO/JAVA/target/simpleweb.jar
           if-no-files-found: error
 
   deploy-webapp:

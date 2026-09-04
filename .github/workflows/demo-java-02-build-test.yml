@@ -12,10 +12,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'src/**'
-      - 'pom.xml'
-      - 'mvnw'
-      - '.mvn/**'
+      - 'DEMO/JAVA/**'
       - '.github/workflows/demo-java-02-build-test.yml'
   pull_request:
     branches: [master]
@@ -27,6 +24,9 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: DEMO/JAVA
 
     steps:
       - name: Checkout source
@@ -38,7 +38,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # verify 會跑 unit test + integration test，並打包出 target/simpleweb.jar
+      # verify 會跑 unit test + integration test，並打包出 DEMO/JAVA/target/simpleweb.jar
       - name: Build and test
         run: ./mvnw -B verify
 
@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-reports
-          path: target/surefire-reports/
+          path: DEMO/JAVA/target/surefire-reports/
           if-no-files-found: warn
 
       - name: Write job summary

@@ -34,6 +34,9 @@ jobs:
   build-on-selfhosted:
     # 這裡不是 ubuntu-latest，而是你自己註冊的 runner 的 labels
     runs-on: [self-hosted, linux, gh200]
+    defaults:
+      run:
+        working-directory: DEMO/JAVA
 
     steps:
       # 原 release tag: actions/checkout@v5

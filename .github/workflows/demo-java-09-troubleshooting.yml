@@ -2,7 +2,7 @@
 #
 # 這是給學員練習「看 log 找問題」用的。裡面種了 3 個真實世界常見的錯：
 #
-#   Bug 1：忘記 actions/checkout          → Maven 找不到 pom.xml
+#   Bug 1：忘記 actions/checkout          → 找不到 DEMO/JAVA 的 Maven Wrapper
 #   Bug 2：job 之間沒有 needs             → 讀不到上一個 job 的 output
 #   Bug 3：引用了不存在的 step id         → 取到空值，後續判斷失效
 #
@@ -30,14 +30,14 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
     steps:
       # Bug 1：這裡少了 - uses: actions/checkout@v5
-      #        runner 上是空的，所以 ./mvnw 根本不存在
+      #        runner 上是空的，所以 ./DEMO/JAVA/mvnw 根本不存在
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Build
-        run: ./mvnw -B verify
+        run: ./DEMO/JAVA/mvnw -B verify
 
       - name: Collect metadata
         id: metadata

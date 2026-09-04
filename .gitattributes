@@ -74,7 +74,7 @@
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
 
-/mvnw text eol=lf
+/DEMO/JAVA/mvnw text eol=lf
 *.cmd text eol=crlf
 *.sh text eol=lf
 *.yml text eol=lf

@@ -12,10 +12,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'src/**'
-      - 'pom.xml'
-      - 'mvnw'
-      - '.mvn/**'
+      - 'DEMO/JAVA/**'
       - '.github/workflows/demo-java-01-build.yml'
   # workflow_dispatch 讓你可以在 Actions 頁面按按鈕手動執行，
   # 上課時非常好用：不用一直亂 push commit 就能重跑。
@@ -29,6 +26,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: DEMO/JAVA
 
     steps:
       # 沒有 checkout，runner 上就沒有你的程式碼，Maven 會找不到 pom.xml
@@ -41,6 +41,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # 用 Maven Wrapper (./mvnw)，所以 runner 不需要事先安裝 Maven
+      # 用 DEMO/JAVA 裡的 Maven Wrapper (./mvnw)，所以 runner 不需要事先安裝 Maven
       - name: Compile
         run: ./mvnw -B compile

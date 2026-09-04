@@ -15,10 +15,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'src/**'
-      - 'pom.xml'
-      - 'mvnw'
-      - '.mvn/**'
+      - 'DEMO/JAVA/**'
       - '.github/workflows/demo-java-03-package-artifact.yml'
   workflow_dispatch:
 
@@ -28,6 +25,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: DEMO/JAVA
     steps:
       - uses: actions/checkout@v5
 
@@ -44,7 +44,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: simpleweb-jar
-          path: target/simpleweb.jar
+          path: DEMO/JAVA/target/simpleweb.jar
           if-no-files-found: error
           retention-days: 7
 
