@@ -89,14 +89,22 @@ class repo 是 <https://github.com/MoneyDemo/20260903-GH200>。依客戶提供�
 SSH-only／OIDC-webapp（`07.deploy-webapp`）／same-VM-runner 主線設計；**下表描述的
 SSH-only 主線與 `07` OIDC 對照，現在是兩個 repo 共同的現行主線**，只是各自維護獨立的
 workflow 檔案、GitHub 設定與部署身分（`demo-java-04` 至 `demo-java-07` 對
-`04.deploy-test` 至 `07.deploy-webapp`）；**新 Azure CLI 取代路徑尚無成功的 live run 證據**，
-但 `docs/demo-environment` 已記錄 OIDC 成功、OneDeploy 400 失敗的 action-path 證據；課堂這一段
-demo 只使用 `MoneyYu/GH-200` 的 workflows。
+`04.deploy-test` 至 `07.deploy-webapp`）；**新 Azure CLI 取代路徑現已在兩個 repo 各自
+live dispatch 成功**（`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 的 run 連結見
+`docs/demo-environment.md` 的「Identity and VM」勾選項，含早期 OneDeploy 400 失敗的
+action-path 證據與後續 Azure CLI 成功的 run），且兩邊 `/api/info` 的 build SHA 與
+default-branch run SHA 完全相符；**兩個 repo 的 `07` 不可同時 dispatch**（共用同一個
+Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗）：必須等前一個 repo 的
+`07` run 成功、且 `/api/info` 的 `buildSha` 已核對等於該次 commit SHA 之後，才能 dispatch
+另一個 repo 的 `07`；最後成功部署的一方會覆蓋 App Service 上的版本（last successful
+deployment wins）；若仍發生碰撞或逾時失敗，等兩邊 run 都跑完後只重新 dispatch 想要的那個
+repo 並重新核對 SHA，不要用 `concurrency:` group 偽造跨 repo 鎖定；課堂這
+一段 demo 只使用 `MoneyYu/GH-200` 的 workflows。
 
 | 項目 | 課堂呈現（`MoneyYu/GH-200`；class repo 現行對齊後的編號相同，但獨立維護） |
 |---|---|
 | Azure Ubuntu 24.04 Linux VM | 同一台 VM 承載兩個 systemd services：`simpleweb-test` 在 `8080`，`simpleweb-prod` 在 `8081`；VM 同時模擬 on-prem application server。 |
-| GitHub Environments | `test` 與 `production`；`production` 有 required-reviewer approval gate。 |
+| GitHub Environments | `test` 與 `production`；`MoneyYu/GH-200` 的方案**不支援** Environment required reviewers（API 回傳 HTTP 422），**不得**描述成有 required-reviewer gate，`06.full-pipeline` 改以 `confirm_production=deploy` 手動輸入確認取代；要展示真正的 reviewer gate 需切到 `MoneyDemo/20260903-GH200` class repo（其 `production` 保留 required-reviewer gate）。 |
 | 主線部署（04-06） | SSH-only：Build → Test → Package → SCP → SSH → `systemctl` → 語意化 `/api/info` SHA smoke test（M5）。強調需要開放 inbound TCP/22 並在 GitHub 保存長期 private key，主機指紋釘選在 `VM_SSH_HOST_KEY`，不使用動態 `ssh-keyscan`。 |
 | OIDC/PaaS 對照（07） | `07.deploy-webapp`：Azure OIDC 部署到 Linux App Service，強調短期 token、`permissions: id-token: write` 與精準 federated credential，不需要開放連接埠或保存長期 private key，因此不是主線的 VM 部署路徑；兩個 repo 各自使用專屬的 OIDC identity（`Website Contributor`，範圍限定該 Web App），不共用。 |
 | Self-hosted runner 對照（08） | `08.selfhosted-runner`（M4）：runner 與 SSH 部署目標同一台 VM，是課堂簡化；適合說明網路可達性、runner group、殘留狀態與不信任 PR 的風險，這條路徑本身不需要 inbound SSH。 |
@@ -269,7 +277,7 @@ demo 只使用 `MoneyYu/GH-200` 的 workflows。
 - [ ] 可開啟 <https://github.com/MoneyDemo/20260903-GH200>，並確認 `labs/lab01`…`labs/lab06`、可選 `lab07` 與 workflows 可讀取。
 - [ ] 在可丟棄分支／repo 實跑一個 `workflow_dispatch`，確認 Build、Test、Package、Artifact 與 log 可展示。
 - [ ] organization 與 target repository 的 Actions 均啟用，allowed-actions policy 不會擋住課堂使用的 action；確認預設 `GITHUB_TOKEN` 權限，workflow 仍採 least privilege。
-- [ ] `test`、`production` GitHub Environments 存在；production 的 required-reviewer approval gate 由正確人員可核准。
+- [ ] `test`、`production` GitHub Environments 存在；class repo `MoneyDemo/20260903-GH200` 的 production required-reviewer approval gate 由正確人員可核准（`MoneyYu/GH-200` 無 reviewer gate，改用 `confirm_production=deploy`）。兩個 repo 的 `test`／`production` 現在都已設定 default-branch-only 部署限制，`MoneyDemo/20260903-GH200` 的 `production` 在此之上仍保留 required-reviewer gate（未被取代）；開課前重新確認兩者仍生效。
 - [ ] OIDC 所需 GitHub Environment secrets/variables 已存在，但不在投影片、chat、terminal history 或 YAML 明文出現。
 - [ ] M4 若需 UI demo，確認講師可見 organization policies / runner groups；否則備妥架構圖或成功截圖。
 - [ ] runner registration token 僅於課堂前註冊時取得；若需要 self-hosted runner，確認主機出站連線與最小 trusted workflow。
@@ -284,8 +292,9 @@ demo 只使用 `MoneyYu/GH-200` 的 workflows。
 - [ ] `VM_SSH_PRIVATE_KEY` 必須設成 `test` 與 `production` 兩個 Environment 各一份的
   **Environment secret（不是 repository secret）**，這樣任意分支的 job 讀不到這把可 sudo 的
   長期私鑰；`04`/`05`/`06` 三個 job 都宣告了對應 environment，同名 secret 因而能各自解析。
-  舊的 repository 層級副本只有在兩個 Environment 都設好、且 default branch 的 `04`/`05`/`06`
-  實跑成功後，才由講師之後另外刪除。同時確認 repository variable `VM_PUBLIC_IP`、
+  舊的 repository 層級副本**已刪除**（兩個 Environment 都設好、且兩個 repo 的 default
+  branch `04`/`05`/`06` 都已實跑成功後完成）；開課前仍請重新確認兩個 repo 的兩個
+  Environment 各自的 secret 仍存在可解析。同時確認 repository variable `VM_PUBLIC_IP`、
   `VM_SSH_USER=azureuser` 與
   `VM_SSH_HOST_KEY` 已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo**
   各自設定（`terraform apply` 後如何從 outputs 帶出這些值並分別設到兩個 repo，見
@@ -296,11 +305,14 @@ demo 只使用 `MoneyYu/GH-200` 的 workflows。
   `web_app_name`／`web_app_url`／`resource_group_name`）已在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp`
   各自使用**專屬**的 Azure OIDC federated credential、`Website Contributor`（範圍精準指定
   該 Linux Web App，不是 resource group 或 subscription）與 workflow
-  `permissions: id-token: write`，subject 對應「該 repo 自己」的 repo 與 Environment；
-  **不沿用** SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity（詳見
+  `permissions: id-token: write`，subject 對應「該 repo 自己」的 repo 與 Environment。
+  SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity（四個 federated credential、
+  VM Contributor、Blob Contributor 角色與 Blob Reader）**已除役移除**；舊的
+  `AZURE_CLIENT_ID` secret 名稱僅保留給 class repo Lab 06 broken-3／fixed-3 的 M2 OIDC
+  troubleshooting 練習使用，不再對應任何 VM／Blob 部署身分（詳見
   [Trainer demo environment guide](demo-environment.md) 的「Azure RBAC for the 07 OIDC
   identity」）。
-- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照各有可展示的成功結果與 fallback 截圖；failed action-path dispatch 證據已存在（OIDC 成功後 OneDeploy 400），但新的 Azure CLI 取代步驟尚無成功的 live-dispatch 證據，需課前實際 dispatch 驗證。
+- [ ] `04`/`05`/`06` 的 SSH-only 主線、`07.deploy-webapp` 的 OIDC/PaaS 對照、`08.selfhosted-runner` 的 same-VM runner 對照均已各自在兩個 repo live dispatch 成功一次（含身分除役之後的 `06`／`07` 重新 dispatch，見 `docs/demo-environment.md` 的「Identity and VM」勾選項與 run 連結，屬先前一次交付的歷史證據）；**下一場交付前講師必須各自重新 dispatch 一次並以 `/api/info` 核對 `buildSha` 與該次 commit SHA 相符**，不可只憑上述歷史紀錄視為當次仍然有效。**⚠️ 兩個 repo 的 `07` 不可同時 dispatch**（共用同一個 Linux Web App，同時觸發會讓兩邊的 OneDeploy 都因啟動逾時失敗）：需等前一個 repo 的 `07` 成功且 `/api/info` SHA 核對相符後才能 dispatch 另一個；最後成功部署者覆蓋 App Service 版本；碰撞或逾時時等兩邊都跑完再重新 dispatch 並核對 SHA，不得用 `concurrency:` group 偽造跨 repo 鎖定（完整規則見 `docs/demo-environment.md`）。
 - [ ] `TERRAFORM/` 現行 stack 沒有 Windows VM 或 Windows Web App；若未來另有 C# demo 需求，需另行規劃基礎設施，不要把 Java jar 部署到 Linux Java Web App 以外的目標。
 
 ### 行政、連結與備援
