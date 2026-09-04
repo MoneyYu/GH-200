@@ -3,6 +3,102 @@
 Concise, non-obvious rules for working in this repository. Keep additions here short and
 behavioral — this is not a place for narrative history.
 
+## Working map
+
+- `README.md` is attendee-facing HackMD content; trainer-only environment details and teaching
+  notes belong in `docs/`.
+- `DEMO/JAVA/` is the Java 21 / Spring Boot 4.1.1 demo. It uses the Maven Wrapper and produces
+  `DEMO/JAVA/target/simpleweb.jar`.
+- `.github/workflows/demo-java-01` through `09` are a progressive teaching sequence: `01`-`06`
+  are the main build/test/package/SSH-deploy path; `07` is the Azure OIDC/App Service contrast;
+  `08` is the private-repo same-VM self-hosted runner contrast; `09` is intentional
+  troubleshooting material.
+- `TERRAFORM/` is the trainer fallback stack for the shared Linux VM, Linux Web App, and runner
+  preinstallation. It is not the primary classroom provisioning path.
+- `MoneyYu/GH-200` and `MoneyDemo/20260903-GH200` share deployment targets but intentionally differ:
+  this private repo replaces required reviewers with explicit `workflow_dispatch` confirmations
+  (`05`: `confirm=deploy` plus a full `build_sha`; `06`: `confirm_production=deploy`) and owns the
+  persistent live self-hosted runner; the public class repo uses the real production reviewer gate
+  and keeps workflow `08` inert.
+
+## Build, test, and static checks
+
+Run Java commands from `DEMO\JAVA` with JDK 21:
+
+```powershell
+# Build/package without tests
+.\mvnw.cmd -B -DskipTests package
+
+# Full verification: unit tests, integration tests, and package
+.\mvnw.cmd -B verify
+
+# All unit tests
+.\mvnw.cmd -B test
+
+# One unit-test class or method
+.\mvnw.cmd -B -Dtest=InfoServiceTest test
+.\mvnw.cmd -B "-Dtest=InfoServiceTest#exposesTheBuildMetadataInjectedByCi" test
+
+# One Failsafe integration-test class or method without running unit tests
+.\mvnw.cmd -B verify "-Dtest=none" "-Dsurefire.failIfNoSpecifiedTests=false" "-Dit.test=SimpleWebApplicationIT"
+.\mvnw.cmd -B verify "-Dtest=none" "-Dsurefire.failIfNoSpecifiedTests=false" "-Dit.test=SimpleWebApplicationIT#healthEndpointReportsUp"
+```
+
+Quote any Maven `-D` argument containing dots in its property name or value when running it in
+PowerShell. This Maven project has no separately configured Java lint plugin; use compilation and
+`verify` as its Java quality gates.
+
+Run Terraform static checks from `TERRAFORM\`:
+
+```powershell
+terraform fmt -check
+terraform init -backend=false
+terraform validate
+```
+
+A real `terraform plan -var "group_postfix=0903"` requires the documented AAD backend
+initialization, `az login`, `ARM_SUBSCRIPTION_ID`, and `TF_VAR_linux_ssh_public_key`. Never run
+`terraform apply`; the detailed authorization rules below remain authoritative.
+
+For delivery link validation, follow the authoritative `Link and video verification` section
+below; it defines the ledger format, environment setup, and exact checker command.
+
+## Cross-file conventions
+
+- When the Java project path changes, update workflow path filters, `working-directory` or command
+  paths, Maven Wrapper invocations, and artifact upload/deploy paths together. If any
+  `demo-java-*` workflow still uses root-relative `src/**`, `./mvnw`, or
+  `target/simpleweb.jar` while the project lives in `DEMO/JAVA`, do not dispatch it until a
+  workflow migration fixes all references; do not move the Java project back to root as
+  a workaround. Because workflows `01`-`03` also have root-relative `push.paths` filters, commit
+  their path migration in the same change as the Java move or the move commit will automatically
+  trigger failing builds.
+- If a committed checkout does not yet contain `DEMO/JAVA` but still contains the root Maven
+  project, it predates the in-progress Java move described here; do not fabricate the target
+  directory or treat the old root layout as the desired end state.
+- If `DEMO/README.md` or trainer docs still describe root-level `pom.xml`, `src/`, Maven Wrapper,
+  or `target/simpleweb.jar`, treat those references as pending the same path migration rather than
+  moving the Java project back to match them.
+- Maven resource filtering bakes the full commit SHA and UTC build time into the JAR. Deployment
+  verification must read `/api/info` and compare the full `buildSha`; HTTP 200 alone is
+  insufficient.
+- Workflows `04`-`06` deploy the GitHub Actions artifact to the VM over SSH; `07` deploys the same
+  app to App Service through Azure OIDC. Do not reintroduce Azure Run Command, Blob artifact
+  transport, or VM managed-identity download into the active path.
+- Shared VM and Web App workflows must follow the manual cross-repository sequencing rules below;
+  a repository-local `concurrency:` group cannot serialize both repositories.
+- `.github/skills/` contains the repository-specific course preparation, commit, and GitHub issue
+  workflows; use the matching skill when applicable. The inherited TypeScript/Vue/Hono guidance
+  and TypeScript test guidance in `.github/instructions/code-review.instructions.md` and
+  `.github/instructions/testing.instructions.md` is not an architecture description for this
+  Java/Terraform repo and must not be copied into this file.
+  `.github/instructions/terraform.instructions.md` establishes the provider floor and apply ban,
+  but the stricter apply/destroy single source of truth below overrides it.
+  `.github/instructions/commit.instructions.md` remains authoritative for commit messages.
+- `.mcp.json` already configures Playwright, Context7, Chrome DevTools, and Microsoft Learn.
+  npm-based MCP servers use the local proxy registry, and Context7 requires the configured
+  `CONTEXT7_API_KEY` input; do not add duplicate server entries.
+
 ## Course identity
 
 - This repo is the reference/prep repo for **GH-200T00-A — "Automate your workflow with GitHub
@@ -44,7 +140,8 @@ behavioral — this is not a place for narrative history.
 - The deployed Java target is `lab-linux-0903-ksh` in `GH200-0903`: test on port `8080`,
   production on `8081`. The class repo `MoneyDemo/20260903-GH200`'s `production` uses a GitHub
   Environment required-reviewer approval gate; `MoneyYu/GH-200` has no required reviewers and
-  instead gates production with the manual `confirm_production=deploy` input — keep the two
+  instead gates production with explicit `workflow_dispatch` confirmations (`05`:
+  `confirm=deploy` plus a full `build_sha`; `06`: `confirm_production=deploy`) — keep the two
   distinct and never describe `MoneyYu/GH-200` as having a required-reviewer gate. The same
   Linux VM is also the SSH-only deployment target for `MoneyYu/GH-200`'s `demo-java-04`-`06` and
   hosts the same-VM self-hosted runner demo (`08`), as a classroom simplification.
