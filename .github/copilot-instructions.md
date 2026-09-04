@@ -48,16 +48,19 @@ behavioral — this is not a place for narrative history.
   distinct and never describe `MoneyYu/GH-200` as having a required-reviewer gate. The same
   Linux VM is also the SSH-only deployment target for `MoneyYu/GH-200`'s `demo-java-04`-`06` and
   hosts the same-VM self-hosted runner demo (`08`), as a classroom simplification.
-- **Self-hosted runner safety (persistent private runner; zero public runner).** The
-  `MoneyYu/GH-200` self-hosted runner is 常駐課程基礎設施 (persistent course infrastructure) that
-  stays registered/online for `demo-java-08`; it is **not** ephemeral and is not deregistered
-  after the demo. The public class repo `MoneyDemo/20260903-GH200` intentionally has zero
-  registered self-hosted runners (registered runner 數維持為零), and its `08.selfhosted-runner`
-  fails closed on `github.event.repository.visibility == 'private'`, so class 08 在 public
-  upstream 略過 (is skipped on the public upstream) and only a learner's own **private copy** (a private clone/import, not a public network fork) with
-  its own isolated runner runs it. Do not write instructions that register a runner to the public
-  class upstream, that say the private runner should be removed after the demo, or that claim the
-  runner count returns to zero after a run.
+- **Self-hosted runner safety (persistent private runner; zero public runner; inert class 08).**
+  The `MoneyYu/GH-200` self-hosted runner is 常駐課程基礎設施 (persistent course infrastructure)
+  that stays registered/online for `demo-java-08`; it is **not** ephemeral and is not deregistered
+  after the demo — it is the **only** live same-VM runner demo. The public class repo
+  `MoneyDemo/20260903-GH200` intentionally has zero registered self-hosted runners, and its
+  `08.selfhosted-runner` is an **inert reference artifact**: its job is hard-skipped with the
+  literal `if: ${{ false }}`, so it never runs on the public upstream **or on any learner fork or
+  private copy** (there is no learner-side runner path in the course). Do not write instructions
+  that register a runner to the public class upstream or to any learner fork/copy, that point a
+  learner runner at the shared course VM, that say the private runner should be removed after the
+  demo, or that claim the runner count returns to zero after a run. The class Lab 07 is an
+  observation/design exercise; any optional hands-on runner belongs on a separate,
+  instructor-approved isolated machine and a separate private repository, never course resources.
 - **Live-run evidence and access retirement are both complete** — do not re-describe either as
   "pending validation" anywhere in this repo. Both repos have live `workflow_dispatch` success
   evidence for `04`-`06` (SSH-only), `07`/`demo-java-07-deploy-webapp` (OIDC + Azure CLI JAR
@@ -66,12 +69,14 @@ behavioral — this is not a place for narrative history.
   duplicate raw run IDs here. The old shared Azure identity used for VM/Blob access before the
   SSH-only refactor (its four federated identity credentials, `Virtual Machine Contributor`,
   `Storage Blob Data Contributor`, and the Linux VM's `Storage Blob Data Reader`) has been
-  removed; the class repo's Lab 06 broken-3/fixed-3 M2 OIDC troubleshooting exercise now
-  references the dedicated, instructor-owned `AZURE_WEBAPP_CLIENT_ID` (the same protected-main
-  Web App identity used by `07`), not the retired shared secret. That exercise is an
-  instructor-owned protected-main identity exercise: student forks receive no Azure identity and
-  only diagnose the `id-token: write` failure, so never describe the retired shared identity as a
-  valid live identity for it, and never reuse the retired identity for a deployment. Both repos'
+  removed. The class repo's Lab 06 broken-3/fixed-3 M2 OIDC troubleshooting exercise **no longer
+  references `AZURE_WEBAPP_CLIENT_ID` or any `secrets.*`**: it uses all-zero placeholder UUIDs
+  (`00000000-0000-0000-0000-000000000000`) for client/tenant/subscription. `AZURE_WEBAPP_CLIENT_ID`
+  is used only by `07`. Student forks receive no Azure identity; the broken case fails before Azure
+  login on the missing `id-token: write`, and the fixed case (`contents: read` + `id-token: write`)
+  obtains the OIDC token and then fails at Azure auth on the placeholder identity — both are the
+  expected two-stage outcomes. Never reuse the retired shared identity for a deployment, and never
+  describe it as a valid live identity. Both repos'
   repository-level
   `VM_SSH_PRIVATE_KEY` copies have been deleted; the secret now exists only as `test`/`production`
   Environment secrets. Both repos also now restrict `test`/`production` Environment deployments

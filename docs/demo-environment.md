@@ -159,11 +159,13 @@ federated credential／Azure identity**：
   `AZURE_WEBAPP_CLIENT_ID` 提供 client ID 給 `azure/login`，代表**這個 Web App 專用**的
   dedicated identity：`Website Contributor` 範圍精準限定該 Linux Web App，federated
   credential subject 綁定各自 repo 的 `test` Environment（immutable subject，不是傳統
-  `owner/repo` 格式）。**class repo 的 Lab 06 broken-3／fixed-3（M2 OIDC troubleshooting）現在
-  也引用同一個 instructor-owned 的 `AZURE_WEBAPP_CLIENT_ID`**，作為一個「講師擁有、只在
-  protected main 才能實際登入」的身分練習：學員 fork **不會**取得這個 Azure 身分，只會診斷
-  `id-token: write` 缺失造成的失敗，因此**不得**把已除役的舊共用身分描述成這個練習的有效
-  live identity。tenant ID／subscription ID 仍沿用既有的 Environment secret 名稱，不受影響。
+  `owner/repo` 格式）。**這個 `AZURE_WEBAPP_CLIENT_ID` 只用於 `07` 講師示範。** class repo 的
+  Lab 06 broken-3／fixed-3（M2 OIDC troubleshooting）**不再引用它、也不引用任何 `secrets.*`**：
+  三個 `azure/login` 輸入（client／tenant／subscription）改為**全為零的佔位 UUID**
+  （`00000000-0000-0000-0000-000000000000`），純供診斷練習。學員 fork 不接觸任何真實 Azure
+  身分；broken 版缺 `id-token: write`、會在取得 OIDC token 前失敗，fixed 版補上
+  `contents: read` + `id-token: write` 後成功取得 OIDC token、再於 Azure 認證階段因佔位身分
+  預期失敗。實際能成功登入 Azure 的示範只在 `07`（真實 dedicated identity）。
 
 ### Terraform outputs → GitHub variables（兩個 repo 都要各設一次）
 
@@ -227,12 +229,12 @@ Get-Content -Raw -LiteralPath $knownHostsPath |
 - [ ] class repo Actions 已啟用，且 organization policy 未阻擋課堂必要 actions。
 - [ ] `test` / `production` Environments 存在；class repo `MoneyDemo/20260903-GH200` 的 production required reviewer 可由正確人員核准（`MoneyYu/GH-200` 無 reviewer gate，改用 `confirm_production=deploy` 手動確認，見下方「MoneyYu/GH-200 self-contained workflows」）。
 - [ ] Environment secrets 和 variables 已依 workflow 名稱建立，且未出現在 YAML、log、投影片或 shell history。
-- [ ] `01.build`…`06.full-pipeline`、`07.deploy-webapp` 各自在**下一場交付前**由講師重新 `workflow_dispatch` 一次，並以 Web App／VM 的 `/api/info` 回應核對 `buildSha` 與該次 run 的 commit SHA 相符；`09.troubleshooting` 有可讀的失敗案例。**`08.selfhosted-runner` 例外：** 在 public class repo `MoneyDemo/20260903-GH200` 上它以 `github.event.repository.visibility == 'private'` **fail-closed 而略過**（預期結果就是 skip、不部署、無 SHA 可核對）——**不要**為了讓它「成功」而在 public class repo 註冊任何 runner；M4 的 live `08` + SHA 佐證只在私有的 `MoneyYu/GH-200`（`demo-java-08`，常駐 runner）上進行。**不可只憑本文「Pre-class smoke test」章節記錄的既有 run 連結視為當次仍然有效**——那些是先前一次交付的歷史證據，不是本次的驗證。
+- [ ] `01.build`…`06.full-pipeline`、`07.deploy-webapp` 各自在**下一場交付前**由講師重新 `workflow_dispatch` 一次，並以 Web App／VM 的 `/api/info` 回應核對 `buildSha` 與該次 run 的 commit SHA 相符；`09.troubleshooting` 有可讀的失敗案例。**`08.selfhosted-runner` 例外：** 在 public class repo `MoneyDemo/20260903-GH200` 上它是**惰性參考範本**，job 以字面 `if: ${{ false }}` **永遠跳過**（預期結果就是 skip、不部署、無 SHA 可核對，在任何學員 fork／複本上亦然）——**不要**為了讓它「成功」而在 public class repo 或任何學員 fork 註冊任何 runner；M4 的 live `08` + SHA 佐證只在私有的 `MoneyYu/GH-200`（`demo-java-08`，常駐 runner）上進行。**不可只憑本文「Pre-class smoke test」章節記錄的既有 run 連結視為當次仍然有效**——那些是先前一次交付的歷史證據，不是本次的驗證。
 - [ ] 若示範 VM self-hosted runner，runner 已在 GitHub UI 顯示可用，registration token 僅在註冊當下取得；registration 需要講師以受信任的手動連線／session 完成，且 runner 應用程式須每 30 天內更新一次，否則 GitHub 不會再派工作給它。
 - [ ] 課前用 Azure CLI 確認並啟動（若已 deallocate）SSH 部署目標 VM；`04`/`05`/`06` 的 workflow 完全不含 Azure 登入，也不會自行啟動 VM，VM 未開機或 TCP/22 未開放時 SSH 連線步驟會快速失敗。
 - [ ] `VM_SSH_PRIVATE_KEY`（**設在 `test` 與 `production` 兩個 Environment 各一份的 Environment secret，不是 repository secret**）與 `VM_PUBLIC_IP`、`VM_SSH_USER=azureuser`、`VM_SSH_HOST_KEY`（variables）已在 **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 兩個 repo** 各自設定（見上方「Terraform outputs → GitHub variables」）；`VM_SSH_HOST_KEY` 是完整 OpenSSH `known_hosts` 行而非 `SHA256:` 指紋，且是在受信任網路下取得後手動貼入，VM host key 輪替後需手動更新。
 - [ ] `AZURE_WEB_APP_NAME`、`AZURE_WEB_APP_HOSTNAME`、`AZURE_RESOURCE_GROUP`（variables）已從 Terraform outputs（`web_app_name`、`web_app_url`、`resource_group_name`）在**兩個 repo**各自設定；`07`／`demo-java-07-deploy-webapp` 專屬的 OIDC identity 已依上方「Azure RBAC for the 07 OIDC identity」在兩個 repo 各自建立，且範圍是精準的該 Linux Web App（`Website Contributor`），未沿用舊有的 VM／Blob 共用 identity。
-- [ ] `AZURE_WEBAPP_CLIENT_ID`（secret）已在**兩個 repo**各自設定，提供上述專屬 Web App identity 的 client ID 給 `07`／`demo-java-07-deploy-webapp` 的 `azure/login`；舊共用 identity 的四個 FIC、`Virtual Machine Contributor`、`Storage Blob Data Contributor`／`Storage Blob Data Reader` **已全數除役移除**（見上方「Azure RBAC for the 07 OIDC identity」）。這個 instructor-owned dedicated identity 同時也是 class repo Lab 06 broken-3／fixed-3 M2 OIDC troubleshooting 練習所引用的 client ID（講師擁有、只在 protected main 可實際登入；學員 fork **不取得**該身分，只診斷 `id-token: write` 失敗），舊共用身分已全數除役，不需等待其他使用者除役。
+- [ ] `AZURE_WEBAPP_CLIENT_ID`（secret）已在**兩個 repo**各自設定，提供上述專屬 Web App identity 的 client ID 給 `07`／`demo-java-07-deploy-webapp` 的 `azure/login`；舊共用 identity 的四個 FIC、`Virtual Machine Contributor`、`Storage Blob Data Contributor`／`Storage Blob Data Reader` **已全數除役移除**（見上方「Azure RBAC for the 07 OIDC identity」）。這個 instructor-owned dedicated identity **只用於 `07` 講師示範**；class repo 的 Lab 06 broken-3／fixed-3（M2 OIDC troubleshooting）**不再引用它、也不引用任何 `secrets.*`**，改用全為零的佔位 UUID（學員 fork 不接觸真實 Azure 身分，只診斷 `id-token: write` 缺失並在修正後於 Azure 認證階段預期失敗）。
 
 ### Self-hosted runner 安全與常駐邊界
 
@@ -242,11 +244,13 @@ Self-hosted runner 不得接收不信任 fork pull request。它保留機器狀�
   infrastructure）：它持續註冊、上線，承載 `demo-java-08` 的 same-VM runner 對照，**不是**
   ephemeral，示範後也**不移除**、registered runner 數也不會歸零。
 - **public class repo `MoneyDemo/20260903-GH200` 刻意不註冊任何 self-hosted runner**：其
-  registered runner 數維持為零。`08.selfhosted-runner` 以
-  `github.event.repository.visibility == 'private'` 作 fail-closed 條件，因此 **class 08 在
-  public upstream 略過**（skip），只有各自「私有」的學員 repo 複本（private copy，非 public repo 的 network fork；visibility 為 private）才會用
-  自己隔離的 runner 執行；實際的 M4 demo 由講師在私有的 `MoneyYu/GH-200` 上用其常駐 runner
-  進行。**絕不**在 public class upstream 註冊 runner。
+  registered runner 數維持為零。`08.selfhosted-runner` 是**惰性參考範本**：其 job 以字面
+  `if: ${{ false }}` **永遠跳過**，因此 **class 08 在 public upstream 與任何學員 fork／私有複本
+  上都不會執行**（沒有任何學員側 runner 路徑）；實際的 M4 demo 由講師在私有的 `MoneyYu/GH-200`
+  上用其常駐 runner 進行，這是**唯一**的 live same-VM runner demo。**絕不**在 public class
+  upstream、任何學員 fork／複本上註冊 runner，也**絕不**把學員 runner 指向共用課程 VM。學員的
+  Lab 07 是觀察／設計練習；任何選修的動手 runner 必須用另一台經講師同意的隔離機器與另一個獨立
+  private repository，不使用課程資源。
 - **共用 VM 部署排序規則（04/05/06/08）：** 兩個 repo 的 `04`/`05`/`06`（SSH 部署）與 `08`
   （same-VM runner）都寫入同一台 VM 的 `simpleweb-test`（`8080`）與 `simpleweb-prod`
   （`8081`）。跨 repo 執行時比照 `07` 的排序規則：在另一個 repo 前一個 VM 部署 run 成功、且相關
@@ -384,10 +388,10 @@ prerequisites」小節（全部 `[ ]`，且明確要求講師重新 dispatch 並
   `MoneyDemo/20260903-GH200` run
   [33819196217](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33819196217)。
   **⚠️ 該 `MoneyDemo/20260903-GH200` 的 08 run 是安全修復前的歷史紀錄，使用的是那台事後已移除的
-  public class runner；現在 class 08 以 `github.event.repository.visibility == 'private'`
-  fail-closed，在 public upstream 一律略過，registered runner 數維持為零——後續交付的 M4 live
-  `08` 佐證只在私有的 `MoneyYu/GH-200` 進行，切勿為重現此 run 而在 public class repo 重新註冊
-  runner。**
+  public class runner；現在 class 08 已改成惰性參考範本，job 以字面 `if: ${{ false }}` 永遠跳過，
+  在 public upstream 與任何學員 fork／複本上都不會執行，registered runner 數維持為零——後續交付的
+  M4 live `08` 佐證只在私有的 `MoneyYu/GH-200` 進行，切勿為重現此 run 而在 public class repo 或
+  任何學員 fork 重新註冊 runner。**
 - [x] **`09.troubleshooting`／`demo-java-09-troubleshooting` 維持預期失敗**，作為 M2 讀
   log 除錯教材（不要修成會成功）：`MoneyYu/GH-200` run
   [33819300290](https://github.com/MoneyYu/GH-200/actions/runs/33819300290)、
