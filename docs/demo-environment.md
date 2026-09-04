@@ -86,8 +86,9 @@ GH-200 自己是 private repo，因此 `demo-java-04`/`05`/`06` 不使用匿名 
 |---|---|
 | Environment secret | `VM_SSH_PRIVATE_KEY`（deploy 用 SSH private key；設在 `test` 與 `production`
   兩個 Environment 各一份，**不是** repository secret，避免任意分支的 job 讀到這把可 sudo 的長期私鑰。
-  `04`/`05`/`06` 三個 job 都宣告了對應 environment，同名 secret 因而能各自解析。舊的 repository 層級
-  副本只有在兩個 Environment 都設好、且 default branch 的 `04`/`05`/`06` 實跑成功後，才由講師之後另外刪除） |
+  `04`/`05`/`06` 三個 job 都宣告了對應 environment，同名 secret 因而能各自解析。兩個 Environment
+  都設好、且兩個 repo 的 default branch `04`/`05`/`06` 都已實跑成功，舊的 repository 層級副本**已
+  刪除**——兩個 repo 現在都只剩 Environment-scoped 的 `VM_SSH_PRIVATE_KEY`） |
 | Repository variable | `VM_PUBLIC_IP` |
 | Repository variable | `VM_SSH_USER=azureuser` |
 | Repository variable | `VM_SSH_HOST_KEY`（完整 OpenSSH `known_hosts` 行；於受信任網路下設定/擷取，VM host key
@@ -143,17 +144,20 @@ federated credential／Azure identity**：
   **stable ID** 格式，實際 subject 一律以該 repo 的 workflow log 顯示的 presented
   assertion subject 為準，不要假設傳統 `owner/repo` 格式，也不要把一個 repo 核對過的
   subject 原樣套用到另一個 repo。
-- **不要沿用 SSH-only 重構之前那組給 VM／Blob 存取用的共用 identity 或其角色指派。**
-  那組身分是為了 Run Command（VM 存取）與 Blob artifact transport（Blob 存取）設計的，
-  範圍與資料類型都與現在 `07` 需要的「只管理一個 Web App」不同；繼續共用等於讓兩個
-  repo 的部署身分持有超出實際需要的 VM／Blob 權限，違反最小權限，也讓兩個 repo 的
-  Azure 存取邊界糾纏在一起。
-- 兩個 repo 的 `07`／`demo-java-07-deploy-webapp` 現在改用專屬的 GitHub secret
+- **舊的共用 identity 已完成除役。** SSH-only 重構之前那組給 VM／Blob 存取用的共用
+  identity——當時是為了 Run Command（VM 存取）與 Blob artifact transport（Blob 存取）
+  設計的——其四個 federated identity credential（FIC）、`Virtual Machine Contributor`、
+  `Storage Blob Data Contributor` 角色指派，以及該 Linux VM 上已無用途的
+  `Storage Blob Data Reader`，都已移除。`gh200state0903ksh` 的 `deployments` Blob
+  container 本身仍不受 Terraform 管理、也未刪除（見上方說明）。
+- 兩個 repo 的 `07`／`demo-java-07-deploy-webapp` 使用專屬的 GitHub secret
   `AZURE_WEBAPP_CLIENT_ID` 提供 client ID 給 `azure/login`，代表**這個 Web App 專用**的
-  federated identity，不再沿用舊有的 `AZURE_CLIENT_ID`。舊的 `AZURE_CLIENT_ID` 目前
-  **維持不動**，因為還有其他 VM／Blob 相關的既有使用者依賴它；等那些舊使用者全部
-  除役後才會處理 `AZURE_CLIENT_ID` 本身，本次變更範圍不含這件事。tenant ID／
-  subscription ID 仍沿用既有的 Environment secret 名稱，不受影響。
+  dedicated identity：`Website Contributor` 範圍精準限定該 Linux Web App，federated
+  credential subject 綁定各自 repo 的 `test` Environment（immutable subject，不是傳統
+  `owner/repo` 格式）。舊的 `AZURE_CLIENT_ID` secret **名稱維持存在**，但現在只供 class
+  repo Lab 06 broken-3／fixed-3 的 M2 OIDC troubleshooting 練習使用，**不再對應任何
+  VM／Blob 部署身分**。tenant ID／subscription ID 仍沿用既有的 Environment secret
+  名稱，不受影響。
 
 ### Terraform outputs → GitHub variables（兩個 repo 都要各設一次）
 
@@ -267,9 +271,11 @@ admin user 為 `azureuser`，只用 SSH public key 認證（`linux_ssh_public_ke
 >
 > **SSH-only 重構本身**（移除 Windows VM/Web App、改用 `linux_ssh_public_key`、加入
 > `AllowSshFromAzureCloud`、runner 預先安裝 extension）那次使用者授權的**恰好一次** reviewed
-> apply **已經完成**：它移除了 Windows stack、建立了 Linux Java Web App 與 runner 預先安裝
-> extension、變更了 NSG（來源受限的 `AllowSshFromAzureCloud`），且 apply 後的 `terraform plan`
-> 乾淨無漂移。該次授權已用罄，**不得再執行或指示任何 `apply`**；每一次額外的 apply 都需要
+> apply **已經完成**：它移除了 Windows VM、Windows Web App，以及兩者各自的 extension、NIC、
+> public IP 與 subnet；Linux VM 保留不動，`runner 預先安裝` extension 成功套用；建立了
+> HTTPS-only、Java SE 21 的 Linux Java Web App；變更了 NSG（來源受限的
+> `AllowSshFromAzureCloud`），且 apply 後的 `terraform plan` 顯示 no changes（乾淨無漂移）。
+> 該次授權已用罄，**不得再執行或指示任何 `apply`**；每一次額外的 apply 都需要
 > 使用者新的明確授權。`terraform destroy` **必須有使用者新的明確要求並經確認**才可執行；
 > 課程開始前絕對不得執行，也不得以 display name、prefix 或 wildcard 對共享 subscription 清理。
 
@@ -300,31 +306,62 @@ Terraform 不會建立 GitHub repository、workflow、Environment、secret、pac
   `az vm run-command`）實際測通。這只證明 OIDC 機制本身在該次交付曾經成功，**不是**
   對目前已對齊的 `07.deploy-webapp`（Linux App Service，`MoneyYu/GH-200` 與
   `MoneyDemo/20260903-GH200` 現行都是這個編號）的驗證。
-- [ ] **尚待課前驗證**：兩個 repo 現行對齊版本的 `07.deploy-webapp`（Linux App
-  Service／OIDC 對照）已有 live workflow dispatch 證據，但曾在舊的
-  `azure/webapps-deploy` 步驟失敗：`MoneyYu/GH-200` run
+- [x] **兩個 repo 現行對齊版本的 `07.deploy-webapp`／`demo-java-07-deploy-webapp`
+  （Linux App Service／OIDC 對照）已 live dispatch 成功。** 早期 dispatch 曾在
+  `azure/webapps-deploy` 步驟失敗（`MoneyYu/GH-200` run
   [33814165531](https://github.com/MoneyYu/GH-200/actions/runs/33814165531)、
   `MoneyDemo/20260903-GH200` run
-  [33814165495](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33814165495)
-  均顯示 `azure/login` 成功、`azure/webapps-deploy` 在 OneDeploy 階段失敗
-  （`Bad Request (CODE: 400)`）。同一份 jar、同一個 App Service 用
-  `az webapp deploy --resource-group ... --name ... --src-path ./target/simpleweb.jar
-  --type jar --restart true --clean true --enable-kudu-warmup true
-  --enriched-errors true` 已驗證部署成功，因此兩個 repo 的 `07` 現已改用明確的
-  Azure CLI JAR deploy 步驟（仍在 `azure/login` OIDC 之後執行）。目前只完成程式碼靜態
-  驗證（YAML parse／`bash -n`）；課前須各自用該 repo 專屬的 OIDC identity（見下方 Azure
-  RBAC 小節）實際 dispatch 一次，確認新的 `az webapp deploy` 步驟成功，
-  並用 `/api/info` 的 build SHA 做語意化 smoke test。
-- [ ] **尚待課前驗證**：`MoneyYu/GH-200` 的 SSH-only `04`/`05`/`06`
-  尚未有 live workflow dispatch 證據；Terraform 基礎設施**已 apply 完成**（apply 後
-  `plan` 乾淨無漂移，見上方 `[!CAUTION]`），但 workflow 本身目前只完成程式碼靜態驗證
-  （lint／`bash -n`），尚未實際觸發 workflow。課前須實際 dispatch 一次，確認
-  `VM_SSH_PRIVATE_KEY` + `VM_SSH_HOST_KEY` 主機指紋釘選、SCP、`systemctl restart` 與
-  `/api/info` SHA smoke test 全部成功，且持久的 `AllowSshFromAzureCloud`（來源
-  `AzureCloud`，非 `Internet`）規則確實可讓 GitHub-hosted runner 連線；不需要、也不應該
-  建立任何臨時 `AllowSshForDemo` 規則。
+  [33814165495](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33814165495)：
+  `azure/login` 成功，OneDeploy 階段 `Bad Request (CODE: 400)`），因此改用明確的
+  Azure CLI JAR deploy 步驟（`az webapp deploy --resource-group ... --name ...
+  --src-path ./target/simpleweb.jar --type jar --restart true --clean true
+  --enable-kudu-warmup true --enriched-errors true`，仍在 `azure/login` OIDC 之後
+  執行）。**兩個 repo 的新 CLI 步驟已各自在上方「舊共用 identity 除役」（見 Azure
+  RBAC 小節）完成之後成功 dispatch 一次：** `MoneyYu/GH-200` run
+  [33820710460](https://github.com/MoneyYu/GH-200/actions/runs/33820710460)、
+  `MoneyDemo/20260903-GH200` run
+  [33820921333](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33820921333)。
+  兩個 repo 的 `/api/info` 回應 `buildSha` 皆與該次 default-branch run 的 commit SHA
+  完全相符，語意化 smoke test 通過。
+  **⚠️ 操作限制：兩個 repo 目前都指向同一個 Linux Web App，兩邊的 `07` 不可同時
+  dispatch**——曾實測同時觸發時，兩邊的 OneDeploy request 都因 App Service 啟動逾時而
+  失敗；改成一次只跑一邊（序列化）即成功。這是操作排程限制，不是 GitHub 跨 repo
+  concurrency lock，不要用 `concurrency:` group 試圖跨 repo 鎖定。
+- [x] **`MoneyYu/GH-200` 與 `MoneyDemo/20260903-GH200` 的 SSH-only `04`/`05`/`06` 都已
+  live dispatch 成功**，且 Terraform 基礎設施的 SSH-only 重構 apply 已完成（`plan`
+  乾淨無漂移，見上方 `[!CAUTION]`）。`VM_SSH_PRIVATE_KEY` + `VM_SSH_HOST_KEY` 主機
+  指紋釘選、SCP、`systemctl restart` 與 `/api/info` SHA smoke test 全部成功，持久的
+  `AllowSshFromAzureCloud`（來源 `AzureCloud`，非 `Internet`）規則確認可讓
+  GitHub-hosted runner 連線；未建立任何臨時 `AllowSshForDemo` 規則。
+  `MoneyYu/GH-200`：`04` run
+  [33817900350](https://github.com/MoneyYu/GH-200/actions/runs/33817900350)、
+  `05` run [33818408662](https://github.com/MoneyYu/GH-200/actions/runs/33818408662)、
+  `06`（於上方身分除役**之後**再次 dispatch）run
+  [33820292029](https://github.com/MoneyYu/GH-200/actions/runs/33820292029)。
+  `MoneyDemo/20260903-GH200`：`04` run
+  [33818661549](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33818661549)、
+  `05`（reviewer 已核准）run
+  [33818771304](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33818771304)、
+  `06`（reviewer 已核准，於身分除役**之後**再次 dispatch）run
+  [33820467021](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33820467021)。
+- [x] **`08.selfhosted-runner`／`demo-java-08-selfhosted-runner` 已 live dispatch 成功**（同一台
+  VM 的 same-VM self-hosted runner 對照）：`MoneyYu/GH-200` run
+  [33819099427](https://github.com/MoneyYu/GH-200/actions/runs/33819099427)、
+  `MoneyDemo/20260903-GH200` run
+  [33819196217](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33819196217)。
+- [x] **`09.troubleshooting`／`demo-java-09-troubleshooting` 維持預期失敗**，作為 M2 讀
+  log 除錯教材（不要修成會成功）：`MoneyYu/GH-200` run
+  [33819300290](https://github.com/MoneyYu/GH-200/actions/runs/33819300290)、
+  `MoneyDemo/20260903-GH200` run
+  [33819300197](https://github.com/MoneyDemo/20260903-GH200/actions/runs/33819300197)。
 - [x] `systemctl` 顯示 `simpleweb-test` 和 `simpleweb-prod` 運作，兩個 health endpoint 為 `UP`。
 - [x] Ephemeral self-hosted runner 已接走一個 trusted workflow，job 完成後 runner count 回到 `0`。
+
+### Environment protection
+
+- [x] **兩個 repo 的 `test`／`production` GitHub Environments 現在都只允許 default branch
+  部署。**`MoneyDemo/20260903-GH200` 的 `production` 在此之上仍保留原有的
+  required-reviewer approval gate（未被 default-branch-only 規則取代）。
 
 ### Lifecycle and cleanup
 

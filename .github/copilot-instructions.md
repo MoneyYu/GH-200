@@ -45,6 +45,25 @@ behavioral — this is not a place for narrative history.
   production on `8081`. Production uses a GitHub Environment required-reviewer gate. The same
   Linux VM is also the SSH-only deployment target for `MoneyYu/GH-200`'s `demo-java-04`-`06` and
   hosts the same-VM self-hosted runner demo (`08`), as a classroom simplification.
+- **Live-run evidence and access retirement are both complete** — do not re-describe either as
+  "pending validation" anywhere in this repo. Both repos have live `workflow_dispatch` success
+  evidence for `04`-`06` (SSH-only), `07`/`demo-java-07-deploy-webapp` (OIDC + Azure CLI JAR
+  deploy, including a run in each repo dispatched *after* the retirement below), and `08`; `09`
+  has its expected-failure evidence. See `docs/demo-environment.md` for the run links — do not
+  duplicate raw run IDs here. The old shared Azure identity used for VM/Blob access before the
+  SSH-only refactor (its four federated identity credentials, `Virtual Machine Contributor`,
+  `Storage Blob Data Contributor`, and the Linux VM's `Storage Blob Data Reader`) has been
+  removed; the `AZURE_CLIENT_ID` secret name now backs only the class repo's Lab 06
+  broken-3/fixed-3 M2 OIDC troubleshooting exercise and no longer has any VM/Blob deployment
+  role — never reuse it for a deployment identity. Both repos' repository-level
+  `VM_SSH_PRIVATE_KEY` copies have been deleted; the secret now exists only as `test`/`production`
+  Environment secrets. Both repos also now restrict `test`/`production` Environment deployments
+  to their default branch; MoneyDemo's `production` still keeps its required-reviewer gate on
+  top of that.
+- **Never dispatch both repos' `07` workflows at the same time.** They share one Linux Web App,
+  and concurrent OneDeploy requests have been observed to fail the App Service startup timeout —
+  this is an operational sequencing rule for trainers/agents, not a GitHub cross-repo concurrency
+  lock, so do not implement a `concurrency:` group spanning both repos to "fix" it.
 - The shared Azure subscription enforces policy after deployment: Public IP resources receive a
   `FirstPartyUsage` tag, Windows OS disks use `Standard_LRS`, Web App basic publishing auth stays
   disabled, and persistent Internet-sourced SSH rules are removed. **The Linux VM's OS disk also
